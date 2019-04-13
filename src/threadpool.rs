@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 
 pub struct ThreadPool {
-    workers: Vec<Worker>,
+    threads: Vec<Option<thread::JoinHandle<()>>>,
     sender: mpsc::Sender<Message>
 }
 
@@ -16,14 +16,17 @@ impl ThreadPool {
         let (sender, receiver) = mpsc::channel();
         let receiver = Arc::new(Mutex::new(receiver));
 
-        let mut workers = Vec::with_capacity(n);
+        let mut threads = Vec::with_capacity(n);
 
         for _ in 0..n {
-            workers.push(Worker::new(Arc::clone(&receiver)));
+            let this_receiver = receiver.clone();
+            threads.push(Some(thread::spawn(|| {
+                work(this_receiver);
+            })));
         }
 
         ThreadPool {
-            workers,
+            threads,
             sender
         }
     }
@@ -38,12 +41,12 @@ impl ThreadPool {
 
 impl Drop for ThreadPool {
     fn drop(&mut self) {
-        for _ in &self.workers {
+        for _ in &self.threads {
             self.sender.send(Message::Terminate).unwrap();
         }
 
-        for w in &mut self.workers {
-            if let Some(t) = w.thread.take() {
+        for t in &mut self.threads {
+            if let Some(t) = t.take() {
                 t.join().unwrap();
             }
         }
@@ -58,7 +61,7 @@ enum Message {
 trait FnBox {
     fn call_box(self: Box<Self>);
 }
-use super::*;
+
 impl<F: FnOnce()> FnBox for F {
     fn call_box(self: Box<F>) {
         (*self)()
@@ -66,20 +69,6 @@ impl<F: FnOnce()> FnBox for F {
 }
 
 type Job = Box<FnBox + Send + 'static>;
-
-struct Worker {
-    thread: Option<thread::JoinHandle<()>>
-}
-
-impl Worker {
-    fn new(receiver: Arc<Mutex<mpsc::Receiver<Message>>>) -> Worker {
-        let thread = thread::spawn(move || {
-            work(receiver);
-        });
-
-        Worker { thread: Some(thread) }
-    }
-}
 
 fn work(receiver: Arc<Mutex<mpsc::Receiver<Message>>>) {
     loop {
@@ -95,7 +84,7 @@ fn work(receiver: Arc<Mutex<mpsc::Receiver<Message>>>) {
         }
     }
 }
-use super::*;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -106,7 +95,7 @@ mod tests {
 
         let (sender, receiver) = mpsc::channel();
         pool.execute(move || {
-            sender.send(123);use super::*;
+            sender.send(123);
         });
 
         let actual = receiver.recv().unwrap();
