@@ -2,6 +2,7 @@ use std::thread;
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::error::Error;
 
 
 pub struct ThreadPool {
@@ -15,6 +16,7 @@ impl ThreadPool {
 
         let (sender, receiver) = mpsc::channel();
         let receiver = Arc::new(Mutex::new(receiver));
+use super::*;
 
         let mut threads = Vec::with_capacity(n);
 
@@ -31,11 +33,12 @@ impl ThreadPool {
         }
     }
 
-    pub fn execute<F>(&self, f: F)
+    pub fn execute<F>(&self, f: F) -> Result<(), Box<dyn Error>>
         where F: FnOnce() + Send + 'static
     {
         let job = Box::new(f);
-        self.sender.send(Message::NewJob(job)).unwrap();
+        self.sender.send(Message::NewJob(job))?;
+        Ok(())
     }
 }
 

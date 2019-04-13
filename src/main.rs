@@ -11,10 +11,16 @@ fn main() {
     let pool = ThreadPool::new(4);
 
     for stream in listener.incoming() {
-        let stream = stream.unwrap();
-        pool.execute(|| {
-            handle_connection(stream);
-        });
+        match stream {
+            Ok(s) => {
+                pool.execute(|| {
+                    handle_connection(s);
+                }).unwrap();
+            }
+            Err(error) => {
+                eprintln!("error with incoming stream: {:?}", error);
+            }
+        }
     }
 }
 
