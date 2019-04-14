@@ -16,7 +16,6 @@ impl ThreadPool {
 
         let (sender, receiver) = mpsc::channel();
         let receiver = Arc::new(Mutex::new(receiver));
-use super::*;
 
         let mut threads = Vec::with_capacity(n);
 
@@ -98,8 +97,8 @@ mod tests {
 
         let (sender, receiver) = mpsc::channel();
         pool.execute(move || {
-            sender.send(123);
-        });
+            sender.send(123).unwrap();
+        }).unwrap();
 
         let actual = receiver.recv().unwrap();
 
@@ -116,14 +115,14 @@ mod tests {
         for i in 0..10 {
             let this_sender = sender.clone();
             pool.execute(move || {
-                this_sender.lock().unwrap().send(i);
-            });
+                this_sender.lock().unwrap().send(i).unwrap();
+            }).unwrap();
         }
 
         let mut actual = Vec::new();
-        for i in 0..10 {
+        for _ in 0..10 {
             let r = receiver.recv().unwrap();
-            actual.push(i);
+            actual.push(r);
         }
         actual.sort();
 
