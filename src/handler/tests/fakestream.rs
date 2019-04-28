@@ -1,7 +1,10 @@
 use std::io::{Read, Write};
 use std::io::Result;
+use std::io::Cursor;
 use std::str;
 
+
+type ByteStream = Cursor<Vec<u8>>;
 
 pub struct FakeStream {
     pub output: String,
@@ -16,24 +19,22 @@ impl FakeStream {
 
     pub fn streamer(&mut self, input: &str) -> Streamer {
         Streamer {
-            input: input.to_string(),
+            input: ByteStream::new(Vec::from(input)),
             output: &mut self.output,
-            writebuffer: vec![],
+            writebuffer: ByteStream::new(vec![]),
         }
     }
 }
 
 pub struct Streamer<'a> {
-    input: String,
+    input: ByteStream,
     output: &'a mut String,
-    writebuffer: Vec<u8>,
+    writebuffer: ByteStream,
 }
 
 impl<'a> Read for Streamer<'a> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        let num = std::cmp::min(buf.len(), self.input.len());
-        let r: String = self.input.drain(..num).collect();
-        r.as_bytes().read(buf)
+        self.input.read(buf)
     }
 }
 
@@ -43,10 +44,9 @@ impl<'a> Write for Streamer<'a> {
     }
 
     fn flush(&mut self) -> Result<()> {
-        let s = std::str::from_utf8(self.writebuffer.as_slice()).unwrap();
-        self.output.extend(s.chars());
-        self.writebuffer.clear();
-
+        self.writebuffer.set_position(0);
+        self.writebuffer.read_to_string(self.output).unwrap();
+        self.writebuffer = ByteStream::new(vec![]);
         Ok(())
     }
 }
