@@ -1,32 +1,44 @@
 use std::io::{Read, Write};
 use std::io::Result;
 use std::str;
+use std::cmp::min;
 
 
 pub struct FakeStream {
-    pub input: String,
     pub output: String,
-    writebuffer: Vec<u8>,
 }
 
 impl FakeStream {
-    pub fn new(input: &str) -> FakeStream {
+    pub fn new() -> FakeStream {
         FakeStream {
-            input: input.to_string(),
             output: String::new(),
+        }
+    }
+
+    pub fn streamer(&mut self, input: &str) -> Streamer {
+        Streamer {
+            input: input.to_string(),
+            output: &mut self.output,
             writebuffer: vec![],
         }
     }
 }
 
-impl Read for FakeStream {
+pub struct Streamer<'a> {
+    input: String,
+    output: &'a mut String,
+    writebuffer: Vec<u8>,
+}
+
+impl<'a> Read for Streamer<'a> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        let r: String = self.input.drain(..buf.len()).collect();
+        let num = std::cmp::min(buf.len(), self.input.len());
+        let r: String = self.input.drain(..num).collect();
         r.as_bytes().read(buf)
     }
 }
 
-impl Write for FakeStream {
+impl<'a> Write for Streamer<'a> {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
         self.writebuffer.write(buf)
     }
@@ -46,30 +58,32 @@ mod tests {
 
     #[test]
     fn test_fakestream_read() {
-        let mut stream = FakeStream::new("abcdef");
+        let mut stream = FakeStream::new();
+        let mut streamer = stream.streamer("abcdef");
 
         let mut first = [0; 2];
-        assert_eq!(2, stream.read(&mut first).unwrap());
+        assert_eq!(2, streamer.read(&mut first).unwrap());
         assert_eq!("ab", str::from_utf8(&first).unwrap());
 
         let mut second = [0; 4];
-        assert_eq!(4, stream.read(&mut second).unwrap());
+        assert_eq!(4, streamer.read(&mut second).unwrap());
         assert_eq!("cdef", str::from_utf8(&second).unwrap());
     }
 
     #[test]
     fn test_fakestream_write() {
-        let mut stream = FakeStream::new("");
+        let mut stream = FakeStream::new();
+        let mut streamer = stream.streamer("");
 
-        assert_eq!(2, stream.write("ab".as_bytes()).unwrap());
-        assert_eq!(4, stream.write("cdef".as_bytes()).unwrap());
-        assert_eq!("", stream.output.as_str());
+        assert_eq!(2, streamer.write("ab".as_bytes()).unwrap());
+        assert_eq!(4, streamer.write("cdef".as_bytes()).unwrap());
+        assert_eq!("", streamer.output.as_str());
 
-        stream.flush().unwrap();
-        assert_eq!("abcdef", stream.output.as_str());
+        streamer.flush().unwrap();
+        assert_eq!("abcdef", streamer.output.as_str());
 
-        stream.write("ghi".as_bytes()).unwrap();
-        stream.flush().unwrap();
-        assert_eq!("abcdefghi", stream.output.as_str());
+        streamer.write("ghi".as_bytes()).unwrap();
+        streamer.flush().unwrap();
+        assert_eq!("abcdefghi", streamer.output.as_str());
     }
 }
