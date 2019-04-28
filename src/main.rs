@@ -6,6 +6,8 @@ use std::net::TcpListener;
 mod threadpool;
 use threadpool::ThreadPool;
 
+mod handler;
+
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
     let pool = ThreadPool::new(4);
@@ -26,7 +28,6 @@ fn main() {
 
 fn handle_connection(mut stream: TcpStream) {
     let mut buffer = [0; 512];
-
     stream.read(&mut buffer).unwrap();
 
     let contents = fs::read_to_string("samples/hello.html").unwrap();
