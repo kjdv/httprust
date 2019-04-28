@@ -1,7 +1,6 @@
 use std::io::{Read, Write};
 use std::io::Result;
 use std::str;
-use std::cmp::min;
 
 
 pub struct FakeStream {
