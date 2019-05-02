@@ -6,7 +6,7 @@ use httparse;
 pub fn handle<T>(mut stream: T) -> Result<()> where T: Read + Write {
     let mut buf = [0; 512];
     let len = stream.read(&mut buf)?;
-    stream.write(&buf[..len])?;
+    stream.write_all(&buf[..len])?;
     stream.flush()?;
 
     Ok(())
