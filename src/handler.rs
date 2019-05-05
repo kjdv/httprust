@@ -2,6 +2,9 @@ use std::io::{Read, Write};
 use std::io::Result;
 use httparse;
 
+use super::fakestream::FakeStream;
+
+
 pub fn handle<T>(mut stream: T) -> Result<()> where T: Read + Write {
     let mut buf = [0; 512];
     let len = stream.read(&mut buf)?;
@@ -14,9 +17,6 @@ pub fn handle<T>(mut stream: T) -> Result<()> where T: Read + Write {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    mod fakestream;
-    use fakestream::FakeStream;
 
     #[test]
     fn test_handle() {
