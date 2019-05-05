@@ -2,7 +2,6 @@ use std::io::{Read, Write};
 use std::io::Result;
 use httparse;
 
-
 pub fn handle<T>(mut stream: T) -> Result<()> where T: Read + Write {
     let mut buf = [0; 512];
     let len = stream.read(&mut buf)?;
@@ -22,7 +21,7 @@ mod tests {
     #[test]
     fn test_handle() {
         let mut stream = FakeStream::new();
-        handle(stream.streamer("blah")).unwrap();
+        handle(stream.streamer(String::from("blah"))).unwrap();
 
         assert_eq!("blah", stream.output.as_str());
     }

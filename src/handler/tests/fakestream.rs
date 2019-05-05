@@ -17,7 +17,7 @@ impl FakeStream {
         }
     }
 
-    pub fn streamer(&mut self, input: &str) -> Streamer {
+    pub fn streamer(&mut self, input: String) -> Streamer {
         Streamer {
             input: ByteStream::new(Vec::from(input)),
             output: &mut self.output,
@@ -58,7 +58,7 @@ mod tests {
     #[test]
     fn test_fakestream_read() {
         let mut stream = FakeStream::new();
-        let mut streamer = stream.streamer("abcdef");
+        let mut streamer = stream.streamer(String::from("abcdef"));
 
         let mut first = [0; 2];
         assert_eq!(2, streamer.read(&mut first).unwrap());
@@ -72,7 +72,7 @@ mod tests {
     #[test]
     fn test_fakestream_write() {
         let mut stream = FakeStream::new();
-        let mut streamer = stream.streamer("");
+        let mut streamer = stream.streamer(String::new());
 
         assert_eq!(2, streamer.write("ab".as_bytes()).unwrap());
         assert_eq!(4, streamer.write("cdef".as_bytes()).unwrap());
