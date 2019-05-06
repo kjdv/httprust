@@ -14,40 +14,35 @@ where
 
     const BUFSIZE: usize = 8192;
     let mut read_buffer = [0; BUFSIZE];
-    let mut read_pos = 0;
 
-    let _request = loop {
-        if read_pos >= BUFSIZE {
-            log::error!("request too large");
+    let mut headers = [httparse::EMPTY_HEADER; 16];
+    let mut request = httparse::Request::new(&mut headers);
+
+    let r = stream.read(&mut read_buffer)?;
+    log::debug!("read {} bytes", r);
+
+    let request_size: usize = match request.parse(&read_buffer[..r]) {
+        Ok(status) => match status {
+            httparse::Status::Complete(size) => size,
+            httparse::Status::Partial => {
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "partial requests not supported",
+                ))
+            }
+        },
+        Err(e) => {
             return Err(Error::new(
                 ErrorKind::Other,
-                format!("request too large (max {} bytes)", BUFSIZE),
-            ));
-        }
-
-        let r = stream.read(&mut read_buffer[read_pos..])?;
-        log::debug!("read {} bytes at pos {}", r, read_pos);
-
-        read_pos += r;
-
-        let mut headers = [httparse::EMPTY_HEADER; 16];
-        let mut req = httparse::Request::new(&mut headers);
-
-        let result = req.parse(&read_buffer).map_err(|e| {
-            Error::new(
-                ErrorKind::Other,
                 format!("could not parse request: '{}'", e),
-            )
-        })?;
-
-        if result.is_complete() {
-            break result;
+            ))
         }
     };
 
     log::debug!(
-        "complete request, buffer holds {}",
-        std::str::from_utf8(&read_buffer).unwrap()
+        "complete request, request is {}\nbody is\n{}",
+        std::str::from_utf8(&read_buffer[..request_size]).unwrap(),
+        std::str::from_utf8(&read_buffer[request_size..]).unwrap()
     );
 
     let response = b"HTTP/1.1 200 OK\r\n\r\nhello!\r\n";
