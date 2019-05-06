@@ -1,8 +1,7 @@
-use std::io::{Read, Write};
-use std::io::Result;
-use std::io::Cursor;
-use std::str;
 
+use std::io::Cursor;
+use std::io::Result;
+use std::io::{Read, Write};
 
 type ByteStream = Cursor<Vec<u8>>;
 
@@ -54,6 +53,7 @@ impl<'a> Write for Streamer<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str;
 
     #[test]
     fn test_fakestream_read() {

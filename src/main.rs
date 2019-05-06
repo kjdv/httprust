@@ -1,41 +1,48 @@
-use std::io::prelude::*;
-use std::fs;
-use std::net::TcpStream;
-use std::net::TcpListener;
 
+use std::net::TcpListener;
 mod threadpool;
 use threadpool::ThreadPool;
 
-mod handler;
+#[cfg(test)]
 mod fakestream;
 
+
+extern crate log;
+extern crate simple_logger;
+
+mod handler;
+
+
+#[cfg(debug_assertions)]
+fn init_logging() {
+    simple_logger::init_with_level(log::Level::Debug).unwrap();
+}
+#[cfg(not(debug_assertions))]
+fn init_logging() {
+    simple_logger::init_with_level(log::Level::Info).unwrap();
+}
+
 fn main() {
-    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    init_logging();
+
+    let address = "127.0.0.1:7878";
+
+    let listener = TcpListener::bind(address).unwrap();
     let pool = ThreadPool::new(4);
+
+    log::info!("listening on {}", address);
 
     for stream in listener.incoming() {
         match stream {
             Ok(s) => {
                 pool.execute(|| {
-                    handle_connection(s);
-                }).unwrap();
+                    handler::handle(s).unwrap_or_else(|e| log::error!("failure: {}", e));
+                })
+                .unwrap();
             }
             Err(error) => {
-                eprintln!("error with incoming stream: {:?}", error);
+                log::error!("error with incoming stream: {:?}", error);
             }
         }
     }
-}
-
-fn handle_connection(mut stream: TcpStream) {
-    let mut buffer = [0; 512];
-    let r = stream.read(&mut buffer).unwrap();
-
-    assert!(r > 0);
-
-    let contents = fs::read_to_string("samples/hello.html").unwrap();
-
-    let response = format!("HTTP/1.1 200 OK\r\n\r\n{}", contents);
-    stream.write_all(response.as_bytes()).unwrap();
-    stream.flush().unwrap();
 }
