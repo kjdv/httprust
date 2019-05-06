@@ -67,4 +67,10 @@ mod tests {
 
         assert_eq!("HTTP/1.1 200 OK\r\n\r\nhello!\r\n", stream.output.as_str());
     }
+
+    #[test]
+    fn test_incomplete_request_errors() {
+        let mut stream = FakeStream::new();
+        handle(stream.streamer(String::from("GET /index.html"))).unwrap_err();
+    }
 }
