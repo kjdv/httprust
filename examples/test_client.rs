@@ -1,6 +1,6 @@
-extern crate log;
-extern crate simple_logger;
 extern crate hyper;
+extern crate simple_logger;
+
 
 use hyper::rt::{Future, Stream};
 
@@ -11,17 +11,22 @@ fn main() {
         .author("Klaas de Vries")
         .about("Simple http test client")
         .about("perform a head request")
-        .arg(clap::Arg::with_name("URL")
-            .required(true)
-            .index(1)
-            .help("url to perform the request on"))
-        .arg(clap::Arg::with_name("method")
-            .short("m")
-            .long("method")
-            .takes_value(true)
-            .default_value("get")
-            .possible_values(&["get", "post"])
-            .help("request method"))
+
+        .arg(
+            clap::Arg::with_name("URL")
+                .required(true)
+                .index(1)
+                .help("url to perform the request on"),
+        )
+        .arg(
+            clap::Arg::with_name("method")
+                .short("m")
+                .long("method")
+                .takes_value(true)
+                .default_value("get")
+                .possible_values(&["get", "post"])
+                .help("request method"),
+        )
         .arg(
             clap::Arg::with_name("debug")
                 .short("d")
@@ -46,7 +51,7 @@ fn main() {
     hyper::rt::run(fetch(url, method));
 }
 
-fn fetch(uri: hyper::Uri, method: &str) -> impl Future<Item=(), Error=()> {
+fn fetch(uri: hyper::Uri, method: &str) -> impl Future<Item = (), Error = ()> {
     let client = hyper::Client::new();
 
     let response_future;
@@ -64,16 +69,13 @@ fn fetch(uri: hyper::Uri, method: &str) -> impl Future<Item=(), Error=()> {
     response_future
         .and_then(|res| {
             log::debug!("{:#?}", res);
-            res
-                .into_body()
-                .for_each(|chunk| {
-                    std::io::stdout()
-                        .write_all(&chunk)
-                        .map_err(|e| {
-                            log::error!("write failure: {}", e);
-                            panic!("write failure");
-                        })
+            res.into_body().for_each(|chunk| {
+                log::debug!("chunk {:?}", chunk);
+                std::io::stdout().write_all(&chunk).map_err(|e| {
+                    log::error!("write failure: {}", e);
+                    panic!("write failure");
                 })
+            })
         })
         .map(|_| {
             log::debug!("done");
