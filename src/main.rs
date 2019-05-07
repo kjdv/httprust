@@ -1,15 +1,10 @@
-
-use std::net::TcpListener;
-mod threadpool;
-use threadpool::ThreadPool;
-
-#[cfg(test)]
-mod fakestream;
-
 extern crate clap;
+extern crate hyper;
 extern crate log;
 extern crate simple_logger;
 
+
+use hyper::rt::Future;
 
 mod handler;
 
@@ -44,24 +39,21 @@ fn main() {
     };
     simple_logger::init_with_level(log_level).unwrap();
 
-    let address = format!("127.0.0.1:{}", args.value_of("port").unwrap());
+    let port = args
+        .value_of("port")
+        .unwrap()
+        .parse::<u16>()
+        .expect("invalid port number");
+    let address = ([127, 0, 0, 1], port).into();
 
-    log::info!("listening on {}", address);
+    let server = hyper::Server::bind(&address)
+        .serve(|| hyper::service::service_fn_ok(handler::handle))
+        .map_err(|e| {
+            log::error!("server error {}", e);
+        });
 
-    let listener = TcpListener::bind(address).unwrap();
-    let pool = ThreadPool::new(4);
+    log::info!("listening on {:?}", address);
 
-    for stream in listener.incoming() {
-        match stream {
-            Ok(s) => {
-                pool.execute(|| {
-                    handler::handle(s).unwrap_or_else(|e| log::error!("failure: {}", e));
-                })
-                .unwrap();
-            }
-            Err(error) => {
-                log::error!("error with incoming stream: {:?}", error);
-            }
-        }
-    }
+    hyper::rt::run(server);
+
 }
