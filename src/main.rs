@@ -6,31 +6,50 @@ use threadpool::ThreadPool;
 #[cfg(test)]
 mod fakestream;
 
-
+extern crate clap;
 extern crate log;
 extern crate simple_logger;
+
 
 mod handler;
 
 
-#[cfg(debug_assertions)]
-fn init_logging() {
-    simple_logger::init_with_level(log::Level::Debug).unwrap();
-}
-#[cfg(not(debug_assertions))]
-fn init_logging() {
-    simple_logger::init_with_level(log::Level::Info).unwrap();
-}
-
 fn main() {
-    init_logging();
+    let args = clap::App::new("httprust")
+        .author("Klaas de Vries")
+        .about("Simple http server")
+        .arg(
+            clap::Arg::with_name("debug")
+                .short("d")
+                .long("debug")
+                .takes_value(false)
+                .help("enable debug logging"),
+        )
+        .arg(
+            clap::Arg::with_name("port")
+                .short("p")
+                .long("port")
+                .takes_value(true)
+                .default_value("8080")
+                .help("set port to listen on"),
+        )
+        .get_matches();
 
-    let address = "127.0.0.1:7878";
+    let log_level = {
+        if args.is_present("debug") {
+            log::Level::Debug
+        } else {
+            log::Level::Info
+        }
+    };
+    simple_logger::init_with_level(log_level).unwrap();
+
+    let address = format!("127.0.0.1:{}", args.value_of("port").unwrap());
+
+    log::info!("listening on {}", address);
 
     let listener = TcpListener::bind(address).unwrap();
     let pool = ThreadPool::new(4);
-
-    log::info!("listening on {}", address);
 
     for stream in listener.incoming() {
         match stream {
