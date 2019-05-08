@@ -37,9 +37,9 @@ impl App {
         }
     }
 
-    pub fn start(&mut self) -> Result<(), &'static str> {
+    pub fn start(&mut self) {
         if self.terminator.is_some() {
-            return Err("already started");
+            panic!("already started");
         }
         let (tx, rx) = channel::<()>();
 
@@ -50,8 +50,6 @@ impl App {
         self.thread.execute(move || {
             run_server(rx, a, p);
         }).expect("failed to execute");
-
-        Ok(())
     }
 
     pub fn wait(&mut self) {
