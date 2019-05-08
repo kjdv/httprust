@@ -1,12 +1,7 @@
 extern crate clap;
-extern crate hyper;
-extern crate log;
 extern crate simple_logger;
 
-
-use hyper::rt::Future;
-
-mod handler;
+use httprust;
 
 
 fn main() {
@@ -28,6 +23,13 @@ fn main() {
                 .default_value("8080")
                 .help("set port to listen on"),
         )
+        .arg(
+            clap::Arg::with_name("local_only")
+                .short("l")
+                .long("local-only")
+                .takes_value(false)
+                .help("only open for local connections")
+        )
         .get_matches();
 
     let log_level = {
@@ -44,16 +46,8 @@ fn main() {
         .unwrap()
         .parse::<u16>()
         .expect("invalid port number");
-    let address = ([127, 0, 0, 1], port).into();
+    let local_only = args.is_present("local_only");
 
-    let server = hyper::Server::bind(&address)
-        .serve(|| hyper::service::service_fn_ok(handler::handle))
-        .map_err(|e| {
-            log::error!("server error {}", e);
-        });
-
-    log::info!("listening on {:?}", address);
-
-    hyper::rt::run(server);
-
+    let mut app = httprust::App::new(port, local_only);
+    app.run().expect("failed to start");
 }

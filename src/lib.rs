@@ -33,8 +33,37 @@ impl App {
 
     pub fn spawn(&mut self) -> Result<(), &'static str> {
         if self.terminator.is_some() {
-            return Err("already spawned");
+            return Err("already started");
         }
+
+        hyper::rt::spawn(self.start());
+
+        Ok(())
+    }
+
+    pub fn run(&mut self) -> Result<(), &'static str> {
+        if self.terminator.is_some() {
+            return Err("already started");
+        }
+
+        hyper::rt::run(self.start());
+
+        Ok(())
+    }
+
+
+    pub fn stop(&mut self) {
+        if let Some(tx) = self.terminator.take() {
+            tx.send(()).map_err(|_| {
+                log::error!("error stopping server");
+            }).unwrap();
+        }
+
+        assert!(self.terminator.is_none());
+    }
+
+    fn start(&mut self) -> impl Future<Item = (), Error = ()> {
+        assert!(self.terminator.is_none());
 
         let address = (self.address, self.port).into();
 
@@ -45,25 +74,13 @@ impl App {
 
         let (tx, rx) = channel::<()>();
 
-        let graceful = server
+        let server = server
             .with_graceful_shutdown(rx)
             .map_err(|e| { log::error!("server error {}", e)});
 
-        hyper::rt::spawn(graceful);
-
         self.terminator = Some(tx);
 
-        Ok(())
-    }
-
-    pub fn stop(&mut self) {
-        if let Some(tx) = self.terminator.take() {
-            tx.send(()).map_err(|_| {
-                log::error!("error stopping server");
-            }).unwrap();
-        }
-
-        assert!(self.terminator.is_none());
+        server
     }
 }
 
