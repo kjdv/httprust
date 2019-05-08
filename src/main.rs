@@ -49,5 +49,6 @@ fn main() {
     let local_only = args.is_present("local_only");
 
     let mut app = httprust::App::new(port, local_only);
-    app.run().expect("failed to start");
+    app.start().expect("failed to start");
+    app.wait();
 }
