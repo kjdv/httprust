@@ -48,7 +48,5 @@ fn main() {
         .expect("invalid port number");
     let local_only = args.is_present("local_only");
 
-    let mut app = httprust::App::new(port, local_only);
-    app.start();
-    app.wait();
+    httprust::run(httprust::Config{port, local_only});
 }
