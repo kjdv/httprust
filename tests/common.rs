@@ -19,8 +19,12 @@ pub fn server() {
     });
 }
 
+pub fn make_uri(resource: &str) -> String {
+    format!("http://{}:{}/{}", ADDRESS, PORT, resource)
+}
+
 pub fn get(resource: &str) -> Result<Response, Error> {
-    let uri = format!("http://{}:{}/{}", ADDRESS, PORT, resource);
+    let uri = make_uri(resource);
 
     Client::new()
         .get(uri.as_str())
