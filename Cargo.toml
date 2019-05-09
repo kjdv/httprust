@@ -13,5 +13,4 @@ futures = "0.1"
 tokio-signal = "0.2"
 
 [dev-dependencies]
-tokio = "0.1"
 reqwest = "0.9"
