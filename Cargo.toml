@@ -10,5 +10,7 @@ simple_logger= "1.0"
 clap = "2.33"
 hyper = "0.12"
 futures = "0.1"
-tokio = "0.1"
 tokio-signal = "0.2"
+
+[dev-dependencies]
+tokio = "0.1"

@@ -1,14 +1,11 @@
 extern crate hyper;
 extern crate log;
 extern crate futures;
-extern crate tokio;
 extern crate tokio_signal;
 
-use futures::Stream;
-use hyper::rt::Future;
+use hyper::rt::{self, Future, Stream};
 use futures::sync::oneshot::{Sender, channel};
 
-use tokio::runtime::current_thread;
 use tokio_signal::unix::{Signal, SIGINT, SIGTERM};
 
 mod handler;
@@ -21,24 +18,15 @@ pub struct Config {
 pub fn run(cfg: Config) {
     log::debug!("starting server");
 
-    let sigint = Signal::new(SIGINT).flatten_stream();
-    let sigterm = Signal::new(SIGTERM).flatten_stream();
-    let stream = sigint.select(sigterm);
+    rt::run(rt::lazy(move || {
+        let (server, stopper) = make_server(cfg);
+        let signal_handler = make_signal_handler(stopper);
 
-    let mut runtime = current_thread::Runtime::new().expect("new runtime");
-    let (server, stopper) = make_server(cfg);
+        rt::spawn(signal_handler);
+        rt::spawn(server);
 
-    runtime.spawn(server);
-
-    let (signal, _) = runtime
-        .block_on(stream.into_future())
-        .map_err(|_| {
-            log::error!("fail waiting for signal");
-        }).expect("blocking on signals");
-
-    log::info!("received signal {:?}, stopping", signal);
-    stopper.send(()).expect("sending stop");
-    runtime.run().expect("final run");
+        Ok(())
+    }));
 }
 
 fn make_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<()>) {
@@ -63,4 +51,22 @@ fn make_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<()>) 
         .map_err(|e| { log::error!("server error {}", e)});
 
     (server, tx)
+}
+
+fn make_signal_handler(stopper: Sender<()>) -> impl Future<Item = (), Error = ()> {
+    let sigint = Signal::new(SIGINT).flatten_stream();
+    let sigterm = Signal::new(SIGTERM).flatten_stream();
+    let stream = sigint.select(sigterm);
+
+    stream.into_future()
+        .and_then(|sig| {
+            let (sig, _) = sig;
+            log::info!("got signal {:?}, stopping", sig);
+            stopper.send(()).expect("send stop event");
+            Ok(())
+        })
+        .map_err(|e| {
+            let (e, _) = e;
+            log::error!("error catching signal: {}", e);
+        })
 }
