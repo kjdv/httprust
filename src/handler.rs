@@ -11,5 +11,5 @@ pub fn handle(request: Request<Body>) -> Response<Body> {
     );
     log::debug!("{:#?}", request);
 
-    Response::new(Body::from("hello!"))
+    Response::new(Body::from("hello!\n"))
 }

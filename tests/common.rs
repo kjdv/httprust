@@ -1,16 +1,13 @@
 use std::sync::{Once, ONCE_INIT};
-use hyper;
-use log;
-use httprust;
-use hyper::rt::Future;
-use tokio::runtime::current_thread;
+use reqwest;
+
+pub use reqwest::{Client, Response, Error, StatusCode};
 
 static SERVER: Once = ONCE_INIT;
 
 const PORT: u16 = 2950;
 const ADDRESS: &str = "127.0.0.1";
 
-pub type Response = hyper::Response<hyper::Body>;
 
 pub fn server() {
     SERVER.call_once(|| {
@@ -22,28 +19,12 @@ pub fn server() {
     });
 }
 
-pub fn get<F>(resource: &str, on_response: F) where F: FnOnce(Response) + 'static {
+pub fn get(resource: &str) -> Result<Response, Error> {
     let uri = format!("http://{}:{}/{}", ADDRESS, PORT, resource);
 
-    let client = hyper::Client::new()
-        .get(uri.parse::<hyper::Uri>().expect("uri"))
-        .and_then(|res| {
-            on_response(res);
-            Ok(())
-        })
-        .map_err(|e| {
-            panic!("error {}", e);
-        });
-
-    current_thread::Runtime::new()
-        .expect("new runtime")
-        .spawn(client)
-        .run()
-        .expect("run");
-}
-
-pub fn is_ok(res: Response) {
-    assert_eq!(hyper::StatusCode::OK, res.status());
+    Client::new()
+        .get(uri.as_str())
+        .send()
 }
 
 fn try_connect(address: &str, port: u16) -> bool {

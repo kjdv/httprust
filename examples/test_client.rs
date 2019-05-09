@@ -1,10 +1,4 @@
-extern crate hyper;
-extern crate simple_logger;
-
-
-use hyper::rt::{Future, Stream};
-
-use std::io::Write;
+extern crate reqwest;
 
 fn main() {
     let args = clap::App::new("httprust")
@@ -27,60 +21,15 @@ fn main() {
                 .possible_values(&["get", "post"])
                 .help("request method"),
         )
-        .arg(
-            clap::Arg::with_name("debug")
-                .short("d")
-                .long("debug")
-                .takes_value(false)
-                .help("enable debug logging"),
-        )
         .get_matches();
 
-    let log_level = {
-        if args.is_present("debug") {
-            log::Level::Debug
-        } else {
-            log::Level::Info
-        }
-    };
-    simple_logger::init_with_level(log_level).unwrap();
 
-    let method = args.value_of("method").unwrap();
-    let url = args.value_of("URL").unwrap().parse().unwrap();
+    let url = args.value_of("URL").unwrap();
 
-    hyper::rt::run(fetch(url, method));
-}
+    let mut response = reqwest::Client::new()
+        .get(url)
+        .send().expect("request failure");
 
-fn fetch(uri: hyper::Uri, method: &str) -> impl Future<Item = (), Error = ()> {
-    let client = hyper::Client::new();
-
-    let response_future;
-
-    if method == "get" {
-        log::debug!("get request");
-        response_future = client.get(uri);
-    } else if method == "post" {
-        log::error!("post requests not implemented yet");
-        panic!("not implemented");
-    } else {
-        panic!("bad method");
-    }
-
-    response_future
-        .and_then(|res| {
-            log::debug!("{:#?}", res);
-            res.into_body().for_each(|chunk| {
-                log::debug!("chunk {:?}", chunk);
-                std::io::stdout().write_all(&chunk).map_err(|e| {
-                    log::error!("write failure: {}", e);
-                    panic!("write failure");
-                })
-            })
-        })
-        .map(|_| {
-            log::debug!("done");
-        })
-        .map_err(|e| {
-            log::error!("request failure {}", e);
-        })
+    println!("{:#?}", response);
+    response.copy_to(&mut std::io::stdout()).expect("failed write");
 }
