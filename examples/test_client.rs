@@ -1,6 +1,10 @@
+extern crate log;
+extern crate pretty_env_logger;
 extern crate reqwest;
 
 fn main() {
+    pretty_env_logger::init_timed();
+
     let args = clap::App::new("httprust")
         .author("Klaas de Vries")
         .about("Simple http test client")
@@ -30,6 +34,6 @@ fn main() {
         .get(url)
         .send().expect("request failure");
 
-    println!("{:#?}", response);
+    log::info!("{:#?}", response);
     response.copy_to(&mut std::io::stdout()).expect("failed write");
 }

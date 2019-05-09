@@ -1,20 +1,15 @@
 extern crate clap;
-extern crate simple_logger;
+extern crate pretty_env_logger;
 
 use httprust;
 
 
 fn main() {
+    pretty_env_logger::init_timed();
+
     let args = clap::App::new("httprust")
         .author("Klaas de Vries")
         .about("Simple http server")
-        .arg(
-            clap::Arg::with_name("debug")
-                .short("d")
-                .long("debug")
-                .takes_value(false)
-                .help("enable debug logging"),
-        )
         .arg(
             clap::Arg::with_name("port")
                 .short("p")
@@ -31,15 +26,6 @@ fn main() {
                 .help("only open for local connections")
         )
         .get_matches();
-
-    let log_level = {
-        if args.is_present("debug") {
-            log::Level::Debug
-        } else {
-            log::Level::Info
-        }
-    };
-    simple_logger::init_with_level(log_level).unwrap();
 
     let port = args
         .value_of("port")
