@@ -33,3 +33,11 @@ fn get_content() {
     assert_eq!(StatusCode::OK, response.status());
     assert_eq!("hello!\n", response.text().unwrap());
 }
+
+#[test]
+fn not_found() {
+    server();
+
+    let response = get("no_such_thing").unwrap();
+    assert_eq!(StatusCode::NOT_FOUND, response.status());
+}
