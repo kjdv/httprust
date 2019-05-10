@@ -58,7 +58,14 @@ impl Handler {
         log::debug!("serving {:?}", path);
 
         match fs::read_to_string(path) {
-            Ok(content) => Response::new(Body::from(content)),
+            Ok(content) => {
+                let content = match request.method() {
+                    &Method::GET => {content},
+                    &Method::HEAD => {String::from("")},
+                    _ => panic!("should have been caught earlier"),
+                };
+                Response::new(Body::from(content))
+            }
             Err(e) => {
                 log::warn!("{}", e);
                 not_found()

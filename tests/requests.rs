@@ -82,3 +82,12 @@ fn no_post_on_static_file() {
     let response = post("index.html", b"blah").expect("post");
     assert_eq!(StatusCode::METHOD_NOT_ALLOWED, response.status());
 }
+
+#[test]
+fn head_returns_no_data() {
+    server();
+
+    let mut response = head("index.html").expect("head");
+    assert_eq!(StatusCode::OK, response.status());
+    assert!(response.text().expect("text").is_empty());
+}
