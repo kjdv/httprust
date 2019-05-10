@@ -1,7 +1,7 @@
 use super::log;
 use std::fs;
 use std::path::{Path, PathBuf};
-use hyper::{Body, Request, Response, StatusCode};
+use hyper::{Body, Request, Response, StatusCode, Method};
 
 
 pub struct Handler {
@@ -25,6 +25,15 @@ impl Handler {
             request.uri()
         );
         log::debug!("{:#?}", request);
+
+        match request.method() {
+            &Method::GET => {},
+            &Method::HEAD => {},
+            _ => {
+                log::debug!("unsuppored method");
+                return method_not_allowed();
+            }
+        }
 
         let path = String::from(request.uri().path());
         let path = path.trim_start_matches("/");
@@ -70,6 +79,14 @@ fn forbidden() -> Response<Body> {
     let response = Response::builder()
         .status(StatusCode::FORBIDDEN)
         .body(Body::from("forbidden"))
+        .expect("invalid response");
+    response
+}
+
+fn method_not_allowed() -> Response<Body> {
+    let response = Response::builder()
+        .status(StatusCode::METHOD_NOT_ALLOWED)
+        .body(Body::from("method not  allowed"))
         .expect("invalid response");
     response
 }

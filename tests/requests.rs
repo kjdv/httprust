@@ -74,3 +74,11 @@ fn no_directory_traversal_allowed_for_non_existant() {
     let response = String::from(std::str::from_utf8(&buf[..r]).expect("utf-8"));
     assert!(response.starts_with("HTTP/1.1 403"));
 }
+
+#[test]
+fn no_post_on_static_file() {
+    server();
+
+    let response = post("index.html", b"blah").expect("post");
+    assert_eq!(StatusCode::METHOD_NOT_ALLOWED, response.status());
+}

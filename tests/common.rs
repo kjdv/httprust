@@ -40,6 +40,16 @@ pub fn get(resource: &str) -> Result<Response, Error> {
         .send()
 }
 
+pub fn post(resource: &str, body: &'static [u8]) -> Result<Response, Error> {
+    let uri = make_uri(resource);
+
+    Client::new()
+        .post(uri.as_str())
+        .body(body)
+        .send()
+}
+
+
 fn try_connect(address: &str, port: u16) -> bool {
     let endpoint = format!("{}:{}", address, port);
     log::debug!("trying to connect to {}", endpoint);
