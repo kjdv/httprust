@@ -29,9 +29,6 @@ impl Handler {
         let path = String::from(request.uri().path());
         let path = path.trim_start_matches("/");
 
-        // todo: automated test for directory traversals. Current reqwest-based tests not suitable
-        //       as reqwest does not allow you to put /../ into the resource, relying on manual
-        //       checks in the meantime.
         let path = match self.root.join(path).canonicalize() {
             Ok(p) => {
                 if !p.starts_with(self.root.to_owned()) {

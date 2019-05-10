@@ -3,8 +3,8 @@ use reqwest;
 
 pub use reqwest::{Client, Response, Error, StatusCode};
 
-const PORT: u16 = 2950;
-const ADDRESS: &str = "127.0.0.1";
+pub const PORT: u16 = 2950;
+pub const ADDRESS: &str = "127.0.0.1";
 
 
 pub fn server() {
