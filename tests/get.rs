@@ -24,3 +24,14 @@ fn http2_get() {
 
     assert_eq!(StatusCode::OK, response.status());
 }
+
+extern crate log;
+
+#[test]
+fn get_content() {
+    server();
+
+    let mut response = get("hello.txt").expect("request failed");
+    assert_eq!(StatusCode::OK, response.status());
+    assert_eq!("hello!\n", response.text().unwrap());
+}

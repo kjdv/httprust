@@ -3,6 +3,7 @@ extern crate log;
 extern crate futures;
 extern crate tokio_signal;
 
+use std::sync::Arc;
 use hyper::rt::{self, Future, Stream};
 use futures::sync::oneshot::{Sender, channel};
 
@@ -13,6 +14,7 @@ mod handler;
 pub struct Config {
     pub port: u16,
     pub local_only: bool,
+    pub root: String,
 }
 
 pub fn run(cfg: Config) {
@@ -27,6 +29,8 @@ pub fn run(cfg: Config) {
 
         Ok(())
     }));
+
+    log::info!("done");
 }
 
 fn make_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<()>) {
@@ -41,8 +45,21 @@ fn make_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<()>) 
 
     let (tx, rx) = channel::<()>();
 
+    let handle = handler::Handler::new(cfg.root.as_str())
+        .map_err(|e| {
+            log::error!("error creating handler {}", e);
+            panic!("create handler");
+        }).unwrap();
+        
+    let handle = Arc::new(handle);
+
     let server = hyper::Server::bind(&address)
-        .serve(|| hyper::service::service_fn_ok(handler::handle));
+        .serve(move || {
+            let this_handler = handle.clone();
+            hyper::service::service_fn_ok(move |req| {
+                this_handler.handle(req)
+            })
+    });
 
     log::info!("listening on {:?}", address);
 
