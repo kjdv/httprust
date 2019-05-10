@@ -1,6 +1,7 @@
 use super::log;
+use std::fs;
 use std::path::{Path, PathBuf};
-use hyper::{Body, Request, Response};
+use hyper::{Body, Request, Response, StatusCode};
 
 
 pub struct Handler {
@@ -25,6 +26,21 @@ impl Handler {
         );
         log::debug!("{:#?}", request);
 
-        Response::new(Body::from("hello!\n"))
+        let path = String::from(request.uri().path());
+        let path = path.trim_start_matches("/");
+        let path = self.root.join(path);
+        log::debug!("serving {:?}", path);
+
+        match fs::read_to_string(path) {
+            Ok(content) => Response::new(Body::from(content)),
+            Err(e) => {
+                log::warn!("{}", e);
+                let response = Response::builder()
+                    .status(StatusCode::NOT_FOUND)
+                    .body(Body::from("resource not found"))
+                    .expect("invalid response");
+                response
+            }
+        }
     }
 }

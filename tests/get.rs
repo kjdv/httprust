@@ -25,8 +25,6 @@ fn http2_get() {
     assert_eq!(StatusCode::OK, response.status());
 }
 
-extern crate log;
-
 #[test]
 fn get_content() {
     server();
