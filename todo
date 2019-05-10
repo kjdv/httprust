@@ -1,0 +1,9 @@
+[ ] async fs access
+[ ] chunked transfers
+[ ] https
+[ ] content-encoding
+[ ] compression
+
+# for non-static usage:
+[ ] post methods
+[ ] url arguments
