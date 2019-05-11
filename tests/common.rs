@@ -10,16 +10,13 @@ pub const ADDRESS: &str = "127.0.0.1";
 pub fn server() {
     static SERVER: Once = ONCE_INIT;
     SERVER.call_once(|| {
-        use std::path::Path;
-
-        let here = Path::new(file!()).parent().unwrap().canonicalize().unwrap();
-        let root = here.join("sample_root");
+        let root = make_temp_root();
 
         std::thread::spawn(move || {
             let cfg = httprust::Config{
                 port: PORT,
                 local_only: true,
-                root: String::from(root.to_str().unwrap()),
+                root: String::from(root.path().to_str().unwrap()),
             };
             httprust::run(cfg);
         });
@@ -95,4 +92,26 @@ fn busy_wait<F>(predicate: F, timeout_s: u64) -> Result<(), &'static str>
             }
         }
     }
+}
+
+fn make_temp_root() -> tempdir::TempDir {
+    let target = tempdir::TempDir::new("httprust-test-root").expect("creating temp dir");
+
+    // no smarter way, include needs string literals
+    let files = [
+        ("hello.txt", include_str!("sample_root/hello.txt")),
+        ("index.html", include_str!("sample_root/index.html")),
+    ];
+
+    for (filename, content) in &files {
+        std::fs::write(
+            format!("{}/{}",
+                target.path().to_str().unwrap(),
+                filename
+            ),
+            content)
+            .expect("write target");
+    }
+
+    target
 }

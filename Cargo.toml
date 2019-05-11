@@ -14,3 +14,4 @@ tokio-signal = "0.2"
 
 [dev-dependencies]
 reqwest = "0.9"
+tempdir = "0.3"
