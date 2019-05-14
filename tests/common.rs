@@ -33,14 +33,6 @@ pub fn make_uri(resource: &str) -> String {
     format!("http://{}:{}/{}", ADDRESS, PORT, resource)
 }
 
-pub fn head(resource: &str) -> Result<Response, Error> {
-    let uri = make_uri(resource);
-
-    Client::new()
-        .head(uri.as_str())
-        .send()
-}
-
 pub fn get(resource: &str) -> Result<Response, Error> {
     let uri = make_uri(resource);
 
@@ -48,16 +40,6 @@ pub fn get(resource: &str) -> Result<Response, Error> {
         .get(uri.as_str())
         .send()
 }
-
-pub fn post(resource: &str, body: &'static [u8]) -> Result<Response, Error> {
-    let uri = make_uri(resource);
-
-    Client::new()
-        .post(uri.as_str())
-        .body(body)
-        .send()
-}
-
 
 fn try_connect(address: &str, port: u16) -> bool {
     let endpoint = format!("{}:{}", address, port);

@@ -50,13 +50,13 @@ fn make_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<()>) 
             log::error!("error creating handler {}", e);
             panic!("create handler");
         }).unwrap();
-        
+
     let handle = Arc::new(handle);
 
     let server = hyper::Server::bind(&address)
         .serve(move || {
             let this_handler = handle.clone();
-            hyper::service::service_fn_ok(move |req| {
+            hyper::service::service_fn(move |req| {
                 this_handler.handle(req)
             })
     });
