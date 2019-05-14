@@ -33,7 +33,7 @@ impl Handler {
             &Method::HEAD => {},
             _ => {
                 log::debug!("unsuppored method");
-                return method_not_allowed();
+                return direct_response(StatusCode::METHOD_NOT_ALLOWED);
             }
         }
 
@@ -43,13 +43,13 @@ impl Handler {
             Ok(p) => p,
             Err(e) => {
                 log::warn!("failed to absolute: {}", e);
-                return bad_request();
+                return direct_response(StatusCode::BAD_REQUEST);
             }
         };
 
         if !path.as_path().starts_with(self.root.to_owned()) {
             log::warn!("attempted directory traversal: {:?}", path);
-            return forbidden();
+            return direct_response(StatusCode::FORBIDDEN);
         }
 
         log::debug!("serving {:?}", path);
@@ -65,40 +65,16 @@ impl Handler {
             }
             Err(e) => {
                 log::warn!("{}", e);
-                not_found()
+                direct_response(StatusCode::NOT_FOUND)
             }
         }
     }
 }
 
-fn not_found() -> Response<Body> {
+fn direct_response(code: StatusCode) -> Response<Body> {
     let response = Response::builder()
-        .status(StatusCode::NOT_FOUND)
-        .body(Body::from("resource not found"))
-        .expect("invalid response");
-    response
-}
-
-fn forbidden() -> Response<Body> {
-    let response = Response::builder()
-        .status(StatusCode::FORBIDDEN)
-        .body(Body::from("forbidden"))
-        .expect("invalid response");
-    response
-}
-
-fn method_not_allowed() -> Response<Body> {
-    let response = Response::builder()
-        .status(StatusCode::METHOD_NOT_ALLOWED)
-        .body(Body::from("method not  allowed"))
-        .expect("invalid response");
-    response
-}
-
-fn bad_request() -> Response<Body> {
-    let response = Response::builder()
-        .status(StatusCode::BAD_REQUEST)
-        .body(Body::from("bad request"))
-        .expect("invalid response");
+        .status(code)
+        .body(Body::from(code.canonical_reason().unwrap_or("")))
+        .unwrap();
     response
 }
