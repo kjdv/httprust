@@ -88,6 +88,9 @@ fn direct_response(code: StatusCode) -> ResponseFuture {
 
 #[cfg(test)]
 mod tests {
+    extern crate tokio;
+    use tokio::runtime::current_thread;
+
     use super::*;
     use futures::Stream;
 
@@ -110,7 +113,29 @@ mod tests {
             .map_err(|e| {
                 panic!("error checking: {}", e);
             });
-        hyper::rt::run(response_future);
+
+        current_thread::Runtime::new()
+            .expect("new runtime")
+            .spawn(response_future)
+            .run()
+            .expect("run runtime");
+    }
+
+    fn check_body<F>(response: Response<Body>, check: F)
+        where F: FnOnce(Vec<u8>) + Send + 'static {
+            let fut = response.into_body()
+                .fold(Vec::new(), |mut acc, chunk| {
+                    acc.extend_from_slice(&*chunk);
+                    future::ok::<_, hyper::Error>(acc)
+                })
+                .and_then(|v| {
+                    check(v);
+                    Ok(())
+                })
+                .map_err(|e| {
+                    panic!("error {}", e);
+                });
+            hyper::rt::spawn(fut);
     }
 
     fn check_code_for_resource(resource: &str, expect: StatusCode) {
@@ -132,15 +157,11 @@ mod tests {
                 .unwrap();
         handle(request, |res| {
             assert_eq!(StatusCode::OK, res.status());
-
-            res.into_body()
-                .take(1)
-                .for_each(|chunk| {
-                    let actual = std::str::from_utf8(chunk.as_ref())
-                        .expect("valid utf-8");
-                    assert_eq!("hello!\n", actual);
-                    Ok(())
-                }).poll().expect("check");
+            check_body(res, |b| {
+                let actual = std::str::from_utf8(b.as_ref())
+                    .expect("valid utf-8");
+                assert_eq!("hello!\n", actual);
+            });
         });
     }
 
@@ -184,15 +205,9 @@ mod tests {
 
         handle(request, |res| {
             assert_eq!(StatusCode::OK, res.status());
-            res.into_body()
-                .fold(Vec::new(), |mut acc, chunk| {
-                    acc.extend_from_slice(&*chunk);
-                    future::ok::<_, hyper::Error>(acc)
-                })
-                .and_then(|v| {
-                    assert!(v.is_empty());
-                    Ok(())
-                }).poll().expect("ready");
+            check_body(res, |b| {
+                assert!(b.is_empty());
+            });
         });
     }
 }
