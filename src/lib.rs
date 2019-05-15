@@ -1,6 +1,7 @@
 extern crate hyper;
 extern crate log;
 extern crate futures;
+extern crate tokio;
 extern crate tokio_signal;
 
 use std::sync::Arc;

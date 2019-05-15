@@ -10,9 +10,9 @@ pretty_env_logger= "0.3"
 clap = "2.33"
 hyper = "0.12"
 futures = "0.1"
+tokio = "0.1.20"
 tokio-signal = "0.2"
 path_abs = "0.4"
 
 [dev-dependencies]
-tokio = "0.1"
 reqwest = "0.9"
