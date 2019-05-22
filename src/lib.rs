@@ -8,8 +8,6 @@ use std::sync::Arc;
 use hyper::rt::{self, Future, Stream};
 use futures::sync::oneshot::{Sender, channel};
 
-use tokio_signal::unix::{Signal, SIGINT, SIGTERM};
-
 mod handler;
 
 pub struct Config {
@@ -72,6 +70,8 @@ fn make_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<()>) 
 }
 
 fn make_signal_handler(stopper: Sender<()>) -> impl Future<Item = (), Error = ()> {
+    use tokio_signal::unix::{Signal, SIGINT, SIGTERM};
+
     let sigint = Signal::new(SIGINT).flatten_stream();
     let sigterm = Signal::new(SIGTERM).flatten_stream();
     let stream = sigint.select(sigterm);
