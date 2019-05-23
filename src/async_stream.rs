@@ -1,27 +1,33 @@
 use futures::{Stream, Poll};
 use futures::prelude::*;
-use tokio::io::{AsyncRead, read_exact, ReadExact};
+use tokio::io::{AsyncRead};
 
 
-pub struct AsyncStream<T>
-    where T: AsyncRead {
-    size: usize,
-    reader: ReadExact<T, Vec<u8>>,
+pub struct AsyncStream<A>
+    where A: AsyncRead {
+    io: A,
+    buffer: Vec<u8>,
+    pos: usize,
 }
 
-impl<T> AsyncStream<T>
-    where T: AsyncRead {
+impl<A> AsyncStream<A>
+    where A: AsyncRead {
 
-    pub fn new(reader: T) -> AsyncStream<T> {
+    pub fn new(reader: A) -> AsyncStream<A> {
         const DEFAULT_SIZE: usize = 0xffff;
         AsyncStream::with_size(reader, DEFAULT_SIZE)
     }
 
-    pub fn with_size(reader: T, max_size: usize) -> AsyncStream<T> {
+    pub fn with_size(reader: A, max_size: usize) -> AsyncStream<A> {
         AsyncStream{
-            size: max_size,
-            reader: read_exact(reader, Self::make_buf(max_size)),
+            io: reader,
+            buffer: Self::make_buf(max_size),
+            pos: 0,
         }
+    }
+
+    fn size(&self) -> usize {
+        self.buffer.len()
     }
 
     fn make_buf(size: usize) -> Vec<u8> {
@@ -29,17 +35,53 @@ impl<T> AsyncStream<T>
         nb.resize(size, 0);
         nb
     }
+
+    fn reset_buffer(&mut self) -> Vec<u8> {
+        let new_buf = Self::make_buf(self.size());
+        let mut result = std::mem::replace(&mut self.buffer, new_buf);
+        result.truncate(self.pos);
+        self.pos = 0;
+        result
+    }
 }
 
-impl<T> Stream for AsyncStream<T>
-    where T: AsyncRead {
+impl<A> Stream for AsyncStream<A>
+    where A: AsyncRead {
     type Item = Vec<u8>;
     type Error = std::io::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        match self.reader.poll() {
-            Ok(Async::Ready(v)) => Ok(Async::Ready(Some(v.1))),
-            Ok(Async::NotReady) => Ok(Async::NotReady),
+        let start = self.pos;
+        let end = self.size();
+
+        assert!(end > start);
+
+        let request = end - start;
+
+        match self.io.read(&mut self.buffer.as_mut_slice()[start..end]) {
+            Ok(n) if n == request => { // all available
+                self.pos += n;
+                let result = self.reset_buffer();
+                Ok(Async::Ready(Some(result)))
+            },
+            Ok(n) if n > 0 => { // part available
+                assert!(n < request);
+                self.pos += n;
+                Ok(Async::NotReady)
+            },
+            Ok(0) => { // eof
+                // if there is something in the buffer, return it
+                if self.pos > 0 {
+                    let result = self.reset_buffer();
+                    Ok(Async::Ready(Some(result)))
+                } else {
+                    Ok(Async::Ready(None))
+                }
+            },
+            Ok(_) => panic!("unreachable"),
+            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                Ok(Async::NotReady)
+            },
             Err(e) => Err(e),
         }
     }
@@ -50,14 +92,29 @@ mod tests {
     use super::*;
     use std::io::Read;
 
-    type Chunk = Result<Vec<u8>, std::io::Error>;
+    enum Part {
+        Data(Vec<u8>),
+        Block,
+        Eof,
+        Err(std::io::Error),
+    }
+
+    impl Part {
+        fn data(b: &'static [u8]) -> Part {
+            Part::Data(Vec::from(b))
+        }
+
+        fn err(msg: &str) -> Part {
+            Part::Err(std::io::Error::new(std::io::ErrorKind::Other, msg))
+        }
+    }
 
     struct FakeRead {
-        input: Vec<Chunk>
+        input: Vec<Part>
     }
 
     impl FakeRead {
-        fn new(input: Vec<Chunk>) -> FakeRead {
+        fn new(input: Vec<Part>) -> FakeRead {
             FakeRead {
                 input: input
             }
@@ -71,14 +128,16 @@ mod tests {
             }
 
             match self.input.remove(0) {
-                Ok(b) => {
-                    let len = std::cmp::min(buf.len(), b.len());
-                    let b = b.as_slice();
-                    buf[..len].clone_from_slice(&b);
+                Part::Data(data) => {
+                    let len = std::cmp::min(buf.len(), data.len());
+                    let data = data.as_slice();
+                    buf[..len].clone_from_slice(&data[..len]);
 
                     Ok(len)
                 },
-                Err(e) => Err(e),
+                Part::Block => Err(wouldblock()),
+                Part::Eof => Ok(0),
+                Part::Err(e) => Err(e),
             }
         }
     }
@@ -97,8 +156,9 @@ mod tests {
     fn exact_single() {
         let mut stream = AsyncStream::with_size(
             FakeRead::new(vec![
-                Ok(Vec::from("abcd"))
-                ]), 4);
+                Part::data(b"abcd")
+            ]
+        ), 4);
 
         let result = stream.poll().unwrap();
         assert_eq!(make_ready("abcd"), result);
@@ -108,15 +168,105 @@ mod tests {
     fn underflow() {
         let mut stream = AsyncStream::with_size(
             FakeRead::new(vec![
-                Ok(Vec::from("abc".as_bytes())),
-                Err(wouldblock()),
-                Ok(Vec::from("d".as_bytes())),
-                ]), 4);
+                Part::data(b"abc"),
+                Part::data(b"d"),
+            ]
+        ), 4);
 
         let result = stream.poll().unwrap();
         assert!(!result.is_ready());
 
         let result = stream.poll().unwrap();
         assert_eq!(make_ready("abcd"), result);
+    }
+
+    #[test]
+    fn overflow() {
+        let mut stream = AsyncStream::with_size(
+            FakeRead::new(vec![
+                Part::data(b"abcdef"),
+            ]
+        ), 4);
+
+        let result = stream.poll().unwrap();
+        assert_eq!(make_ready("abcd"), result);
+    }
+
+    #[test]
+    fn wouldblock_is_noop() {
+        let mut stream = AsyncStream::with_size(
+            FakeRead::new(vec![
+                Part::Block,
+            ]
+        ), 4);
+
+        let result = stream.poll().unwrap();
+        assert!(!result.is_ready());
+    }
+
+    #[test]
+    fn error_is_propagated() {
+        let mut stream = AsyncStream::with_size(
+            FakeRead::new(vec![
+                Part::err("blah"),
+            ]
+        ), 4);
+
+        stream.poll().unwrap_err();
+    }
+
+    #[test]
+    fn eof_gives_none() {
+        let mut stream = AsyncStream::with_size(
+            FakeRead::new(vec![
+                Part::Eof,
+            ]
+        ), 4);
+
+        let result = stream.poll().unwrap();
+        assert_eq!(Async::Ready(None), result);
+    }
+
+    #[test]
+    fn early_eof_gives_part_chunk() {
+        let mut stream = AsyncStream::with_size(
+            FakeRead::new(vec![
+                Part::data(b"ab"),
+                Part::Eof,
+            ]
+        ), 4);
+
+        let result = stream.poll().unwrap();
+        assert!(!result.is_ready());
+
+        let result = stream.poll().unwrap();
+        assert_eq!(make_ready("ab"), result);
+
+        let result = stream.poll().unwrap();
+        assert_eq!(Async::Ready(None), result);
+    }
+
+    #[test]
+    fn buffer_is_reset() {
+        let mut stream = AsyncStream::with_size(
+            FakeRead::new(vec![
+                Part::data(b"abcd"),
+                Part::data(b"ef"),
+                Part::data(b"gh"),
+                Part::Eof,
+            ]
+        ), 4);
+
+        let result = stream.poll().unwrap();
+        assert_eq!(make_ready("abcd"), result);
+
+        let result = stream.poll().unwrap();
+        assert!(!result.is_ready());
+
+        let result = stream.poll().unwrap();
+        assert_eq!(make_ready("efgh"), result);
+
+        let result = stream.poll().unwrap();
+        assert_eq!(Async::Ready(None), result);
     }
 }
