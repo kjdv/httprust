@@ -24,3 +24,14 @@ fn http2_get() {
 
     assert_eq!(StatusCode::OK, response.status());
 }
+
+#[test]
+fn large_files_are_chunked() {
+    server();
+
+    let response = get("large.txt").expect("request failed");
+    let transer_encoding = response.headers().get(reqwest::header::TRANSFER_ENCODING)
+        .expect("expected transfer-encoding");
+
+    assert_eq!("chunked", transer_encoding);
+}
