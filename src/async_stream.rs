@@ -20,8 +20,18 @@ impl<T> AsyncStream<T>
     pub fn with_size(reader: T, max_size: usize) -> AsyncStream<T> {
         AsyncStream{
             reader: reader,
-            buf: Vec::with_capacity(max_size),
+            buf: Self::new_buf(max_size),
         }
+    }
+
+    fn size(&self) -> usize {
+        self.buf.capacity()
+    }
+
+    fn new_buf(size: usize) -> Vec<u8> {
+        let mut nb = Vec::with_capacity(size);
+        nb.resize(size, 0);
+        nb
     }
 }
 
@@ -31,7 +41,11 @@ impl<T> Stream for AsyncStream<T>
     type Error = std::io::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        Ok(Async::Ready(Some(Vec::new())))
+        let result = self.reader.poll_read(self.buf.as_mut_slice())?;
+
+        let mut nb = Self::new_buf(self.size());
+        std::mem::swap(&mut nb, &mut self.buf);
+        Ok(Async::Ready(Some(nb)))
     }
 }
 
@@ -39,7 +53,6 @@ impl<T> Stream for AsyncStream<T>
 mod tests {
     use super::*;
     use std::io::Read;
-    use futures::try_ready;
 
     type Chunk = Poll<Vec<u8>, std::io::Error>;
 
