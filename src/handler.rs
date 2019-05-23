@@ -4,7 +4,7 @@ use path_abs::{PathDir, PathFile};
 use super::log;
 use futures::{future, Future};
 use hyper::{Body, Request, Response, StatusCode, Method};
-use tokio::io::AsyncRead;
+use crate::async_stream::AsyncStream;
 
 
 type ResponseFuture = Box<Future<Item=Response<Body>, Error=hyper::Error> + Send>;
@@ -93,20 +93,13 @@ fn serve_file(path: PathFile) -> ResponseFuture {
     log::debug!("serving {:?}", path);
 
     let fut = tokio::fs::file::File::open(path)
-        .and_then(|mut file| {
-            let mut buf = Vec::new();
-            file.read_buf(&mut buf)
-                .and_then(|size| {
-                    log::info!("read {:?}", size);
-                    Ok(Response::builder()
-                        .status(StatusCode::OK)
-                        .body(Body::from(buf))
-                        .unwrap())
-                })
-                .or_else(|e| {
-                    log::error!("reading file: {}", e);
-                    Ok(raw_direct_response(StatusCode::INTERNAL_SERVER_ERROR))
-                })
+        .and_then(|file| {
+            let stream = AsyncStream::new(file);
+
+            future::ok(Response::builder()
+                .status(StatusCode::OK)
+                .body(Body::wrap_stream(stream))
+                .unwrap())
         })
         .or_else(|e| {
             log::error!("error serving file: {}", e);

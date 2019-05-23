@@ -1,6 +1,7 @@
 use futures::{Stream, Poll};
 use futures::prelude::*;
 use tokio::io::{AsyncRead};
+use super::log;
 
 
 pub struct AsyncStream<A>
@@ -19,6 +20,7 @@ impl<A> AsyncStream<A>
     }
 
     pub fn with_size(reader: A, max_size: usize) -> AsyncStream<A> {
+        log::debug!("creating stream reader with chunk size {}", max_size);
         AsyncStream{
             io: reader,
             buffer: Self::make_buf(max_size),
@@ -58,30 +60,36 @@ impl<A> Stream for AsyncStream<A>
 
         let request = end - start;
 
-        match self.io.read(&mut self.buffer.as_mut_slice()[start..end]) {
-            Ok(n) if n == request => { // all available
+        log::debug!("attempting to read {} bytes", request);
+        match self.io.poll_read(&mut self.buffer.as_mut_slice()[start..end]) {
+            Ok(Async::Ready(n)) if n == request => { // all available
+                log::debug!("read {} bytes, chunk ready", n);
                 self.pos += n;
                 let result = self.reset_buffer();
                 Ok(Async::Ready(Some(result)))
             },
-            Ok(n) if n > 0 => { // part available
+            Ok(Async::Ready(n)) if n > 0 => { // part available
+                log::debug!("read {} bytes, chunk not ready", n);
                 assert!(n < request);
                 self.pos += n;
-                Ok(Async::NotReady)
+                self.poll()
             },
-            Ok(0) => { // eof
+            Ok(Async::Ready(0)) => { // eof
                 // if there is something in the buffer, return it
                 if self.pos > 0 {
+                    log::debug!("read 0 bytes, serving last chunk");
                     let result = self.reset_buffer();
                     Ok(Async::Ready(Some(result)))
                 } else {
+                    log::debug!("read 0 bytes, singalling eof");
                     Ok(Async::Ready(None))
                 }
             },
-            Ok(_) => panic!("unreachable"),
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+            Ok(Async::NotReady) => {
+                log::debug!("no data ready yet");
                 Ok(Async::NotReady)
-            },
+            }
+            Ok(_) => panic!("unreachable"),
             Err(e) => Err(e),
         }
     }
