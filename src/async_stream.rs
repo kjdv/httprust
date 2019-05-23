@@ -1,6 +1,6 @@
 use futures::{Stream, Poll};
 use futures::prelude::*;
-use tokio::io::{AsyncRead, read_exact};
+use tokio::io::{AsyncRead, read_exact, ReadExact};
 
 
 pub struct AsyncStream<T>
@@ -40,7 +40,8 @@ impl<T> Stream for AsyncStream<T>
         let buf = self.make_buf();
         match read_exact(&mut self.reader, buf).poll() {
             Ok(Async::Ready(v)) => Ok(Async::Ready(Some(v.1))),
-            _ => Ok(Async::NotReady)
+            Ok(Async::NotReady) => Ok(Async::NotReady),
+            Err(e) => Err(e),
         }
     }
 }
@@ -50,7 +51,7 @@ mod tests {
     use super::*;
     use std::io::Read;
 
-    type Chunk = Poll<Vec<u8>, std::io::Error>;
+    type Chunk = Result<Vec<u8>, std::io::Error>;
 
     struct FakeRead {
         input: Vec<Chunk>
@@ -71,24 +72,26 @@ mod tests {
             }
 
             match self.input.remove(0) {
-                Ok(Async::Ready(b)) => {
-                    assert!(buf.len() >= b.len());
-                    let len = std::cmp::min(buf.len(), b.len());
-                    let b = b.as_slice();
-                    buf[..len].clone_from_slice(&b);
+                Ok(b) => {
+                    if b.len() < buf.len() {
+                        Err(wouldblock())
+                    } else {
+                        let len = std::cmp::min(buf.len(), b.len());
+                        let b = b.as_slice();
+                        buf[..len].clone_from_slice(&b);
 
-                    Ok(len)
+                        Ok(len)
+                    }
                 },
-                Ok(Async::NotReady) => Err(std::io::Error::new(std::io::ErrorKind::WouldBlock, "would block")),
                 Err(e) => Err(e),
             }
         }
     }
 
-    impl AsyncRead for FakeRead {
-        fn poll_read(&mut self, _buf: &mut [u8]) -> Poll<usize, std::io::Error> {
-            panic!("should not be called directly");
-        }
+    impl AsyncRead for FakeRead {}
+
+    fn wouldblock() -> std::io::Error {
+        std::io::Error::new(std::io::ErrorKind::WouldBlock, "would block")
     }
 
     fn make_ready(v: &str) -> Async<Option<Vec<u8>>> {
@@ -99,8 +102,23 @@ mod tests {
     fn exact_single() {
         let mut stream = AsyncStream::with_size(
             FakeRead::new(vec![
-                Ok(Async::Ready(Vec::from("abcd")))
+                Ok(Vec::from("abcd"))
                 ]), 4);
+
+        let result = stream.poll().unwrap();
+        assert_eq!(make_ready("abcd"), result);
+    }
+
+    #[test]
+    fn underflow() {
+        let mut stream = AsyncStream::with_size(
+            FakeRead::new(vec![
+                Ok(Vec::from("abc".as_bytes())),
+                Ok(Vec::from("abcd".as_bytes())),
+                ]), 4);
+
+        let result = stream.poll().unwrap();
+        assert!(!result.is_ready());
 
         let result = stream.poll().unwrap();
         assert_eq!(make_ready("abcd"), result);
