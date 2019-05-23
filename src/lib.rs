@@ -8,6 +8,7 @@ use std::sync::Arc;
 use hyper::rt::{self, Future, Stream};
 use futures::sync::oneshot::{Sender, channel};
 
+mod async_stream;
 mod handler;
 
 pub struct Config {
