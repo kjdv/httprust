@@ -154,27 +154,6 @@ mod tests {
             .expect("run runtime");
     }
 
-    fn check_body<F>(_response: Response<Body>, _check: F)
-        where F: FnOnce(Vec<u8>) + Send + 'static {
-            // body-checking tests disabled until figured out how to do them
-            /*
-
-            let fut = response.into_body()
-                .fold(Vec::new(), |mut acc, chunk| {
-                    acc.extend_from_slice(&*chunk);
-                    future::ok::<_, hyper::Error>(acc)
-                })
-                .and_then(|v| {
-                    check(v);
-                    Ok(())
-                })
-                .map_err(|e| {
-                    panic!("error {}", e);
-                });
-            hyper::rt::spawn(fut);
-            */
-    }
-
     fn check_code_for_resource(resource: &str, expect: StatusCode) {
         let uri = format!("http://something/{}", resource);
         let request = Request::builder()
@@ -184,22 +163,6 @@ mod tests {
             handle(request, move |res| {
                 assert_eq!(expect, res.status());
             });
-    }
-
-    #[test]
-    fn get_content() {
-        let request = Request::builder()
-                .uri("http://something/hello.txt")
-                .body(Body::from(""))
-                .unwrap();
-        handle(request, |res| {
-            // assert_eq!(StatusCode::OK, res.status());
-            check_body(res, |b| {
-                let actual = std::str::from_utf8(b.as_ref())
-                    .expect("valid utf-8");
-                assert_eq!("hello!\n", actual);
-            });
-        });
     }
 
     #[test]
@@ -229,22 +192,6 @@ mod tests {
 
         handle(request, |res| {
             assert_eq!(StatusCode::METHOD_NOT_ALLOWED, res.status());
-        });
-    }
-
-    #[test]
-    fn head_returns_no_data() {
-        let request = Request::builder()
-            .uri("http://something/index.html")
-            .method("HEAD")
-            .body(Body::from(""))
-            .unwrap();
-
-        handle(request, |res| {
-            // assert_eq!(StatusCode::OK, res.status());
-            check_body(res, |b| {
-                assert!(b.is_empty());
-            });
         });
     }
 }
