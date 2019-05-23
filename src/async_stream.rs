@@ -15,7 +15,7 @@ impl<A> AsyncStream<A>
     where A: AsyncRead {
 
     pub fn new(reader: A) -> AsyncStream<A> {
-        const DEFAULT_SIZE: usize = 0xffff;
+        const DEFAULT_SIZE: usize = 1024*1024; // 1MB
         AsyncStream::with_size(reader, DEFAULT_SIZE)
     }
 
@@ -45,14 +45,8 @@ impl<A> AsyncStream<A>
         self.pos = 0;
         result
     }
-}
 
-impl<A> Stream for AsyncStream<A>
-    where A: AsyncRead {
-    type Item = Vec<u8>;
-    type Error = std::io::Error;
-
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+    fn do_poll(&mut self) -> Poll<Option<Vec<u8>>, std::io::Error> {
         let start = self.pos;
         let end = self.size();
 
@@ -72,7 +66,7 @@ impl<A> Stream for AsyncStream<A>
                 log::debug!("read {} bytes, chunk not ready", n);
                 assert!(n < request);
                 self.pos += n;
-                self.poll()
+                Ok(Async::NotReady)
             },
             Ok(Async::Ready(0)) => { // eof
                 // if there is something in the buffer, return it
@@ -91,6 +85,25 @@ impl<A> Stream for AsyncStream<A>
             }
             Ok(_) => panic!("unreachable"),
             Err(e) => Err(e),
+        }
+    }
+}
+
+impl<A> Stream for AsyncStream<A>
+    where A: AsyncRead {
+    type Item = Vec<u8>;
+    type Error = std::io::Error;
+
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        match self.do_poll() {
+            // if there is an eof or an error, there is no need to notify. in all other cases there is
+            Ok(Async::Ready(None)) => Ok(Async::Ready(None)),
+            Err(e) => Err(e),
+            Ok(v) => {
+                log::debug!("notify()ing task");
+                tokio::prelude::task::current().notify();
+                Ok(v)
+            }
         }
     }
 }
@@ -168,7 +181,7 @@ mod tests {
             ]
         ), 4);
 
-        let result = stream.poll().unwrap();
+        let result = stream.do_poll().unwrap();
         assert_eq!(make_ready("abcd"), result);
     }
 
@@ -181,10 +194,10 @@ mod tests {
             ]
         ), 4);
 
-        let result = stream.poll().unwrap();
+        let result = stream.do_poll().unwrap();
         assert!(!result.is_ready());
 
-        let result = stream.poll().unwrap();
+        let result = stream.do_poll().unwrap();
         assert_eq!(make_ready("abcd"), result);
     }
 
@@ -196,7 +209,7 @@ mod tests {
             ]
         ), 4);
 
-        let result = stream.poll().unwrap();
+        let result = stream.do_poll().unwrap();
         assert_eq!(make_ready("abcd"), result);
     }
 
@@ -208,7 +221,7 @@ mod tests {
             ]
         ), 4);
 
-        let result = stream.poll().unwrap();
+        let result = stream.do_poll().unwrap();
         assert!(!result.is_ready());
     }
 
@@ -220,7 +233,7 @@ mod tests {
             ]
         ), 4);
 
-        stream.poll().unwrap_err();
+        stream.do_poll().unwrap_err();
     }
 
     #[test]
@@ -231,7 +244,7 @@ mod tests {
             ]
         ), 4);
 
-        let result = stream.poll().unwrap();
+        let result = stream.do_poll().unwrap();
         assert_eq!(Async::Ready(None), result);
     }
 
@@ -244,13 +257,13 @@ mod tests {
             ]
         ), 4);
 
-        let result = stream.poll().unwrap();
+        let result = stream.do_poll().unwrap();
         assert!(!result.is_ready());
 
-        let result = stream.poll().unwrap();
+        let result = stream.do_poll().unwrap();
         assert_eq!(make_ready("ab"), result);
 
-        let result = stream.poll().unwrap();
+        let result = stream.do_poll().unwrap();
         assert_eq!(Async::Ready(None), result);
     }
 
@@ -265,16 +278,16 @@ mod tests {
             ]
         ), 4);
 
-        let result = stream.poll().unwrap();
+        let result = stream.do_poll().unwrap();
         assert_eq!(make_ready("abcd"), result);
 
-        let result = stream.poll().unwrap();
+        let result = stream.do_poll().unwrap();
         assert!(!result.is_ready());
 
-        let result = stream.poll().unwrap();
+        let result = stream.do_poll().unwrap();
         assert_eq!(make_ready("efgh"), result);
 
-        let result = stream.poll().unwrap();
+        let result = stream.do_poll().unwrap();
         assert_eq!(Async::Ready(None), result);
     }
 }
