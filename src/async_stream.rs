@@ -1,12 +1,12 @@
 use futures::{Stream, Poll};
 use futures::prelude::*;
-use tokio::io::AsyncRead;
+use tokio::io::{AsyncRead, read_exact};
 
 
 pub struct AsyncStream<T>
     where T: AsyncRead {
     reader: T,
-    buf: Vec<u8>,
+    size: usize,
 }
 
 impl<T> AsyncStream<T>
@@ -20,17 +20,13 @@ impl<T> AsyncStream<T>
     pub fn with_size(reader: T, max_size: usize) -> AsyncStream<T> {
         AsyncStream{
             reader: reader,
-            buf: Self::new_buf(max_size),
+            size: max_size,
         }
     }
 
-    fn size(&self) -> usize {
-        self.buf.capacity()
-    }
-
-    fn new_buf(size: usize) -> Vec<u8> {
-        let mut nb = Vec::with_capacity(size);
-        nb.resize(size, 0);
+    fn make_buf(&self) -> Vec<u8> {
+        let mut nb = Vec::with_capacity(self.size);
+        nb.resize(self.size, 0);
         nb
     }
 }
@@ -41,11 +37,11 @@ impl<T> Stream for AsyncStream<T>
     type Error = std::io::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        let result = self.reader.poll_read(self.buf.as_mut_slice())?;
-
-        let mut nb = Self::new_buf(self.size());
-        std::mem::swap(&mut nb, &mut self.buf);
-        Ok(Async::Ready(Some(nb)))
+        let buf = self.make_buf();
+        match read_exact(&mut self.reader, buf).poll() {
+            Ok(Async::Ready(v)) => Ok(Async::Ready(Some(v.1))),
+            _ => Ok(Async::NotReady)
+        }
     }
 }
 
@@ -69,27 +65,29 @@ mod tests {
     }
 
     impl Read for FakeRead {
-        fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
-            panic!("should not be called directly");
-        }
-    }
-
-    impl AsyncRead for FakeRead {
-        fn poll_read(&mut self, buf: &mut [u8]) -> Poll<usize, std::io::Error> {
-            assert!(!self.input.is_empty());
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.input.is_empty() {
+                return Ok(0);
+            }
 
             match self.input.remove(0) {
-                Ok(Async::NotReady) => Ok(Async::NotReady),
                 Ok(Async::Ready(b)) => {
                     assert!(buf.len() >= b.len());
                     let len = std::cmp::min(buf.len(), b.len());
                     let b = b.as_slice();
                     buf[..len].clone_from_slice(&b);
 
-                    Ok(Async::Ready(len))
+                    Ok(len)
                 },
+                Ok(Async::NotReady) => Err(std::io::Error::new(std::io::ErrorKind::WouldBlock, "would block")),
                 Err(e) => Err(e),
             }
+        }
+    }
+
+    impl AsyncRead for FakeRead {
+        fn poll_read(&mut self, _buf: &mut [u8]) -> Poll<usize, std::io::Error> {
+            panic!("should not be called directly");
         }
     }
 
