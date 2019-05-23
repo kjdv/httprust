@@ -5,8 +5,8 @@ use tokio::io::{AsyncRead, read_exact, ReadExact};
 
 pub struct AsyncStream<T>
     where T: AsyncRead {
-    reader: T,
     size: usize,
+    reader: ReadExact<T, Vec<u8>>,
 }
 
 impl<T> AsyncStream<T>
@@ -19,14 +19,14 @@ impl<T> AsyncStream<T>
 
     pub fn with_size(reader: T, max_size: usize) -> AsyncStream<T> {
         AsyncStream{
-            reader: reader,
             size: max_size,
+            reader: read_exact(reader, Self::make_buf(max_size)),
         }
     }
 
-    fn make_buf(&self) -> Vec<u8> {
-        let mut nb = Vec::with_capacity(self.size);
-        nb.resize(self.size, 0);
+    fn make_buf(size: usize) -> Vec<u8> {
+        let mut nb = Vec::with_capacity(size);
+        nb.resize(size, 0);
         nb
     }
 }
@@ -37,8 +37,7 @@ impl<T> Stream for AsyncStream<T>
     type Error = std::io::Error;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        let buf = self.make_buf();
-        match read_exact(&mut self.reader, buf).poll() {
+        match self.reader.poll() {
             Ok(Async::Ready(v)) => Ok(Async::Ready(Some(v.1))),
             Ok(Async::NotReady) => Ok(Async::NotReady),
             Err(e) => Err(e),
@@ -73,15 +72,11 @@ mod tests {
 
             match self.input.remove(0) {
                 Ok(b) => {
-                    if b.len() < buf.len() {
-                        Err(wouldblock())
-                    } else {
-                        let len = std::cmp::min(buf.len(), b.len());
-                        let b = b.as_slice();
-                        buf[..len].clone_from_slice(&b);
+                    let len = std::cmp::min(buf.len(), b.len());
+                    let b = b.as_slice();
+                    buf[..len].clone_from_slice(&b);
 
-                        Ok(len)
-                    }
+                    Ok(len)
                 },
                 Err(e) => Err(e),
             }
@@ -114,7 +109,8 @@ mod tests {
         let mut stream = AsyncStream::with_size(
             FakeRead::new(vec![
                 Ok(Vec::from("abc".as_bytes())),
-                Ok(Vec::from("abcd".as_bytes())),
+                Err(wouldblock()),
+                Ok(Vec::from("d".as_bytes())),
                 ]), 4);
 
         let result = stream.poll().unwrap();
