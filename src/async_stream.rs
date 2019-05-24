@@ -15,7 +15,7 @@ impl<A> AsyncStream<A>
     where A: AsyncRead {
 
     pub fn new(reader: A) -> AsyncStream<A> {
-        const DEFAULT_SIZE: usize = 1024*1024; // 1MB
+        const DEFAULT_SIZE: usize = 0xffff;
         AsyncStream::with_size(reader, DEFAULT_SIZE)
     }
 
