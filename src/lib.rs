@@ -3,11 +3,15 @@ extern crate log;
 extern crate futures;
 extern crate tokio;
 extern crate tokio_signal;
+#[macro_use]
+extern crate lazy_static;
+
 
 use std::sync::Arc;
 use hyper::rt::{self, Future, Stream};
 use futures::sync::oneshot::{Sender, channel};
 
+mod meta_info;
 mod async_stream;
 mod handler;
 
