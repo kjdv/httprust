@@ -96,7 +96,7 @@ fn serve_file(path: PathFile) -> ResponseFuture {
         .and_then(|file| {
             let stream = AsyncStream::new(file);
 
-            future::ok(Response::builder()
+            Ok(Response::builder()
                 .status(StatusCode::OK)
                 .body(Body::wrap_stream(stream))
                 .unwrap())
