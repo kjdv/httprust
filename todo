@@ -1,7 +1,7 @@
 [x] async fs access
 [x] chunked transfers
 [ ] https
-[ ] content-encoding
+[x] content-encoding
 [ ] compression
 
 # for non-static usage:
