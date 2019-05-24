@@ -1,5 +1,5 @@
-[ ] async fs access
-[ ] chunked transfers
+[x] async fs access
+[x] chunked transfers
 [ ] https
 [ ] content-encoding
 [ ] compression
