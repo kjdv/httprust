@@ -3,9 +3,10 @@ extern crate path_abs;
 use path_abs::{PathDir, PathFile};
 use super::log;
 use futures::{future, Future};
-use hyper::{Body, Request, Response, StatusCode, Method};
+use hyper::{Body, Request, Response, StatusCode, Method, HeaderMap, header};
+use hyper::header::HeaderValue;
 use crate::async_stream::AsyncStream;
-
+use crate::meta_info::*;
 
 type ResponseFuture = Box<Future<Item=Response<Body>, Error=hyper::Error> + Send>;
 
@@ -65,7 +66,7 @@ impl Handler {
 
         match request.method() {
             &Method::HEAD => sniff_file(path),
-            &Method::GET => serve_file(path),
+            &Method::GET => serve_file(path, request.headers()),
             _ => panic!("unreachable!"),
         }
     }
@@ -89,14 +90,47 @@ fn sniff_file(path: PathFile) -> ResponseFuture {
 
 }
 
-fn serve_file(path: PathFile) -> ResponseFuture {
+fn should_compress(m: &Mime, headers: &HeaderMap<HeaderValue>) -> bool {
+    if is_compressable(m) {
+        log::debug!("{} is eligable for compression", m);
+
+        return match headers.get(header::ACCEPT_ENCODING) {
+            Some(ae) => {
+                match ae.to_str() {
+                    Ok(aes) => {
+                        let s = String::from(aes);
+                        s.split(',').any(|v| v == "gzip")
+                    },
+                    Err(_) => false,
+                }
+            },
+            None => false,
+        };
+    } else {
+        log::debug!("{} is not eligable for compression", m);
+        return false;
+    }
+}
+
+fn serve_file(path: PathFile, headers: &hyper::HeaderMap<hyper::header::HeaderValue>) -> ResponseFuture {
     log::debug!("serving {:?}", path);
 
+    let mut builder = Response::builder();
+    if let Some(mime) = sniff_mime(path.as_os_str()) {
+        builder.header(header::CONTENT_TYPE, mime.to_string());
+
+        if should_compress(mime, headers) {
+            log::debug!("compressing {:?}", path);
+            // todo
+        }
+    }
+
+
     let fut = tokio::fs::file::File::open(path)
-        .and_then(|file| {
+        .and_then(move |file| {
             let stream = AsyncStream::new(file);
 
-            Ok(Response::builder()
+            Ok(builder
                 .status(StatusCode::OK)
                 .body(Body::wrap_stream(stream))
                 .unwrap())

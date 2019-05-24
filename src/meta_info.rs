@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 
 
-pub fn sniff_mime(path: &str) -> Option<&Mime> {
+pub fn sniff_mime(path: &OsStr) -> Option<&Mime> {
     lazy_static! {
         static ref MAPPING: HashMap<&'static OsStr, Mime> = {
             let mut map = HashMap::new();
@@ -24,7 +24,7 @@ pub fn sniff_mime(path: &str) -> Option<&Mime> {
             map.insert(OsStr::new("html"), mime::TEXT_HTML);
             map.insert(OsStr::new("text"), mime::TEXT_PLAIN);
             map.insert(OsStr::new("xml"),  mime::TEXT_XML);
-        
+
             map
         };
     };
@@ -37,6 +37,20 @@ pub fn sniff_mime(path: &str) -> Option<&Mime> {
             }
         })
         .unwrap_or(None)
+}
+
+pub fn is_compressable(m: &Mime) -> bool {
+    if m.type_() == mime::TEXT {
+        return true;
+    }
+
+    match m.subtype() {
+        mime::JAVASCRIPT => true,
+        mime::JSON => true,
+        mime::TEXT => true,
+        mime::XML => true,
+        _ => false
+    }
 }
 
 
@@ -56,8 +70,24 @@ mod tests {
         ];
 
         for (filename, expect) in &cases {
-            let actual = super::sniff_mime(filename);
+            let actual = super::sniff_mime(OsStr::new(filename));
             assert_eq!(*expect, actual.map(|v| v.clone()));
+        }
+    }
+
+    #[test]
+    fn is_compressable() {
+        let cases = [
+            ("f.txt", true),
+            ("f.png", false),
+            ("f.html", true),
+            ("f.json", true),
+        ];
+
+        for (filename, expect) in &cases {
+            let mime = super::sniff_mime(OsStr::new(filename)).expect("valid mime");
+            let actual = super::is_compressable(mime);
+            assert_eq!(*expect, actual);
         }
     }
 }
