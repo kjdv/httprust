@@ -64,30 +64,8 @@ impl Handler {
             }
         };
 
-        match request.method() {
-            &Method::HEAD => sniff_file(path),
-            &Method::GET => serve_file(path, request.headers()),
-            _ => panic!("unreachable!"),
-        }
+        serve_file(path, request)
     }
-}
-
-fn sniff_file(path: PathFile) -> ResponseFuture {
-    log::debug!("sniffing {:?}", path);
-
-    let fut = tokio::fs::file::File::open(path)
-        .and_then(|_| {
-            future::ok(Response::builder()
-                .status(StatusCode::OK)
-                .body(Body::empty())
-                .unwrap())
-        })
-        .or_else(|e| {
-            log::error!("error sniffing file: {}", e); // should have been caught earlier, maybe permission issue?
-            direct_response(StatusCode::INTERNAL_SERVER_ERROR)
-        });
-    Box::new(fut)
-
 }
 
 fn should_compress(m: &Mime, headers: &HeaderMap<HeaderValue>) -> bool {
@@ -112,14 +90,14 @@ fn should_compress(m: &Mime, headers: &HeaderMap<HeaderValue>) -> bool {
     }
 }
 
-fn serve_file(path: PathFile, headers: &hyper::HeaderMap<hyper::header::HeaderValue>) -> ResponseFuture {
+fn serve_file(path: PathFile, request: Request<Body>) -> ResponseFuture {
     log::debug!("serving {:?}", path);
 
     let mut builder = Response::builder();
     if let Some(mime) = sniff_mime(path.as_os_str()) {
         builder.header(header::CONTENT_TYPE, mime.to_string());
 
-        if should_compress(mime, headers) {
+        if should_compress(mime, request.headers()) {
             log::debug!("compressing {:?}", path);
             // todo
         }
@@ -128,16 +106,22 @@ fn serve_file(path: PathFile, headers: &hyper::HeaderMap<hyper::header::HeaderVa
 
     let fut = tokio::fs::file::File::open(path)
         .and_then(move |file| {
-            let stream = AsyncStream::new(file);
+            let body = match request.method() {
+                &Method::HEAD => Body::empty(),
+                &Method::GET => {
+                    let stream = AsyncStream::new(file);
+                    Body::wrap_stream(stream)
+                },_ => panic!("unreachable!"),
+            };
 
             Ok(builder
                 .status(StatusCode::OK)
-                .body(Body::wrap_stream(stream))
+                .body(body)
                 .unwrap())
         })
         .or_else(|e| {
-            log::error!("error serving file: {}", e);
-            Ok(raw_direct_response(StatusCode::INTERNAL_SERVER_ERROR))
+            log::warn!("error serving file: {}", e);
+            Ok(raw_direct_response(StatusCode::NOT_FOUND))
         });
     Box::new(fut)
 }
