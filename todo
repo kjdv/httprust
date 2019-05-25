@@ -2,7 +2,7 @@
 [x] chunked transfers
 [ ] https
 [x] content-encoding
-[ ] compression
+[x] compression
 
 # for non-static usage:
 [ ] post methods
