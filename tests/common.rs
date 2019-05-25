@@ -21,6 +21,7 @@ pub fn server() {
                 port: PORT,
                 local_only: true,
                 root: String::from(root.to_str().unwrap()),
+                tls: None,
             };
             httprust::run(cfg);
         });

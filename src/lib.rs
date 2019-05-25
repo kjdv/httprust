@@ -16,14 +16,28 @@ mod async_stream;
 mod compressed_read;
 mod handler;
 
+pub struct TlsConfig {
+    pub identity: String,
+    pub password: Option<String>,
+}
+
+impl std::fmt::Debug for TlsConfig {
+    // prevent passwords appearing plaintext in logs
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{{ identity={} }}", self.identity)
+    }
+}
+
+#[derive(Debug)]
 pub struct Config {
     pub port: u16,
     pub local_only: bool,
-    pub root: String,
+    pub root: String, 
+    pub tls: Option<TlsConfig>,
 }
 
 pub fn run(cfg: Config) {
-    log::debug!("starting server");
+    log::info!("starting, using configurations {:#?}", cfg);
 
     rt::run(rt::lazy(move || {
         let (server, stopper) = make_server(cfg);
@@ -48,6 +62,8 @@ fn make_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<()>) 
     };
     let address = (address, cfg.port).into();
 
+    let server_builder = hyper::Server::bind(&address);
+
     let (tx, rx) = channel::<()>();
 
     let handle = handler::Handler::new(cfg.root.as_str())
@@ -58,7 +74,7 @@ fn make_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<()>) 
 
     let handle = Arc::new(handle);
 
-    let server = hyper::Server::bind(&address)
+    let server = server_builder
         .serve(move || {
             let this_handler = handle.clone();
             hyper::service::service_fn(move |req| {
