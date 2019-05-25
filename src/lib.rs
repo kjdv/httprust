@@ -13,6 +13,7 @@ use futures::sync::oneshot::{Sender, channel};
 
 mod meta_info;
 mod async_stream;
+mod compressed_read;
 mod handler;
 
 pub struct Config {

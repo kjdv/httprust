@@ -7,6 +7,7 @@ use hyper::{Body, Request, Response, StatusCode, Method, HeaderMap, header};
 use hyper::header::HeaderValue;
 use crate::async_stream::AsyncStream;
 use crate::meta_info::*;
+use crate::compressed_read::*;
 
 type ResponseFuture = Box<Future<Item=Response<Body>, Error=hyper::Error> + Send>;
 
@@ -94,12 +95,14 @@ fn serve_file(path: PathFile, request: Request<Body>) -> ResponseFuture {
     log::debug!("serving {:?}", path);
 
     let mut builder = Response::builder();
+    let mut use_gzip = false;
     if let Some(mime) = sniff_mime(path.as_os_str()) {
         builder.header(header::CONTENT_TYPE, mime.to_string());
 
         if should_compress(mime, request.headers()) {
             log::debug!("compressing {:?}", path);
-            // todo
+            builder.header(header::CONTENT_ENCODING, "gzip");
+            use_gzip = true;
         }
     }
 
@@ -109,9 +112,16 @@ fn serve_file(path: PathFile, request: Request<Body>) -> ResponseFuture {
             let body = match request.method() {
                 &Method::HEAD => Body::empty(),
                 &Method::GET => {
-                    let stream = AsyncStream::new(file);
-                    Body::wrap_stream(stream)
-                },_ => panic!("unreachable!"),
+                    if use_gzip {
+                        let file = CompressedRead::new(file);
+                        let stream = AsyncStream::new(file);
+                        Body::wrap_stream(stream)
+                    } else {
+                        let stream = AsyncStream::new(file);
+                        Body::wrap_stream(stream)
+                    }
+                },
+                _ => panic!("unreachable!"),
             };
 
             Ok(builder

@@ -61,3 +61,49 @@ fn head_returns_no_data() {
     assert_eq!(StatusCode::OK, response.status());
     assert_eq!("", response.text().expect("some content"));
 }
+
+fn sha256(s: String) -> String {
+    use sha2::{Sha256, Digest};
+
+    let mut hasher = Sha256::new();
+    hasher.input(s.as_bytes());
+    format!("{:x}", hasher.result())
+}
+
+#[test]
+fn content_is_intact() {
+    server();
+
+    let mut response = Client::builder()
+        .gzip(false)
+        .build()
+        .unwrap()
+        .get(make_uri("large.txt").as_str())
+        .send()
+        .expect("request failed");
+
+    assert_eq!(StatusCode::OK, response.status());
+    assert_eq!(
+        "223bdc7cb024ebe16c5fb1f10c47812eabbd51039cc7c67b10729501e4bdb577",
+        sha256(response.text().unwrap())
+    );
+}
+
+#[test]
+fn content_is_intact_when_compressed() {
+    server();
+
+    let mut response = Client::builder()
+        .gzip(true)
+        .build()
+        .unwrap()
+        .get(make_uri("large.txt").as_str())
+        .send()
+        .expect("request failed");
+
+    assert_eq!(StatusCode::OK, response.status());
+    assert_eq!(
+        "223bdc7cb024ebe16c5fb1f10c47812eabbd51039cc7c67b10729501e4bdb577",
+        sha256(response.text().unwrap())
+    );
+}
