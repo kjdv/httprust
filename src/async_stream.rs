@@ -33,9 +33,7 @@ impl<A> AsyncStream<A>
     }
 
     fn make_buf(size: usize) -> Vec<u8> {
-        let mut nb = Vec::with_capacity(size);
-        nb.resize(size, 0);
-        nb
+        vec![0; size]
     }
 
     fn reset_buffer(&mut self) -> Vec<u8> {
@@ -137,7 +135,7 @@ mod tests {
     impl FakeRead {
         fn new(input: Vec<Part>) -> FakeRead {
             FakeRead {
-                input: input
+                input
             }
         }
     }

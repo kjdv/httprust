@@ -1,8 +1,8 @@
 extern crate clap;
 extern crate pretty_env_logger;
+extern crate path_abs;
 
 use httprust;
-
 
 fn main() {
     pretty_env_logger::init_timed();
@@ -14,11 +14,12 @@ fn main() {
         .author("Klaas de Vries")
         .about("Simple http server")
         .arg(
-            clap::Arg::with_name("root")
+            clap::Arg::with_name("root_directory")
                 .short("r")
                 .long("root")
                 .takes_value(true)
                 .default_value(cwd)
+                .validator(validate_directory)
                 .help("root of the directory to serve")
         )
         .arg(
@@ -37,14 +38,25 @@ fn main() {
                 .help("only open for local connections")
         )
         .arg(
-            clap::Arg::with_name("tls")
-                .short("t")
-                .long("tls")
+            clap::Arg::with_name("certificate_file")
+                .short("c")
+                .long("cert")
                 .takes_value(true)
-                .help("use tls with the identity file and password provided (use the format 'identity.p12,mypass'")
+                .requires("private_key_file")
+                .validator(validate_file)
+                .help("when provided, this will be a https server. The proviced certifice will be used")
+        )
+        .arg(
+            clap::Arg::with_name("private_key_file")
+                .short("k")
+                .long("key")
+                .takes_value(true)
+                .requires("certificate_file")
+                .validator(validate_file)
+                .help("needed in combination with --cert, this specifies the file containing the private key")
         )
         .get_matches();
-    
+
     let cfg = httprust::Config{
         port: args
             .value_of("port")
@@ -52,58 +64,28 @@ fn main() {
             .parse::<u16>()
             .expect("invalid port number"),
         local_only: args.is_present("local_only"),
-        root: args.value_of("root").unwrap().to_string(),
-        tls: parse_tls(args.value_of("tls")),
+        root: args.value_of("root_directory").unwrap().to_string(),
+        tls: args.value_of("certificate_file")
+                .map(|cf| {
+                    httprust::TlsConfig{
+                        certificate_file: cf.to_string(),
+                        private_key_file: args.value_of("private_key_file").unwrap().to_string()
+                    }
+                }),
     };
     httprust::run(cfg);
 }
 
-fn parse_tls(s: Option<&str>) -> Option<httprust::TlsConfig> {
-    s.map(|s| {
-        let s = String::from(s);
-        let mut it = s.split(',');
-        let filename = it.next().map(String::from).expect("no filename given for tls argument");
-        let password = it.next().map(String::from);
-
-        if it.next().is_some() {
-            panic!("more than 2 items given for tls argument");
-        }
-
-        httprust::TlsConfig{
-            identity: filename,
-            password: password,
-        }
-    })
+fn validate_directory(d: String) -> Result<(), String> {
+    match path_abs::PathDir::new(d) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("{}", e))
+    }
 }
 
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn parse_tls() {
-        let cases = [
-            (None, None),
-            (Some("identity.p12"), Some(("identity.p12", None))),
-            (Some("identity.p12,pass"), Some(("identity.p12", Some("pass")))),
-        ];
-
-        for (input, expect) in cases.into_iter() {
-            let actual = super::parse_tls(*input);
-
-            match expect {
-                None => assert!(actual.is_none()),
-                Some((i, p)) => {
-                    let actual = actual.expect("some");
-                    assert_eq!(String::from(*i), actual.identity);
-                    assert_eq!(p.map(String::from), actual.password);
-                }
-            }
-        }
-    }
-
-    #[test]
-    #[should_panic]
-    fn parse_tls_too_many_args() {
-        super::parse_tls(Some("a,b,c"));
+fn validate_file(f: String) -> Result<(), String> {
+    match path_abs::PathFile::new(f) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("{}", e))
     }
 }

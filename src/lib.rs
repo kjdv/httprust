@@ -16,16 +16,10 @@ mod async_stream;
 mod compressed_read;
 mod handler;
 
+#[derive(Debug)]
 pub struct TlsConfig {
-    pub identity: String,
-    pub password: Option<String>,
-}
-
-impl std::fmt::Debug for TlsConfig {
-    // prevent passwords appearing plaintext in logs
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{{ identity={} }}", self.identity)
-    }
+    pub certificate_file: String,
+    pub private_key_file: String,
 }
 
 #[derive(Debug)]
@@ -36,8 +30,9 @@ pub struct Config {
     pub tls: Option<TlsConfig>,
 }
 
-pub fn run(cfg: Config) {
-    log::info!("starting, using configurations {:#?}", cfg);
+pub fn run_notify<F>(cfg: Config, notify: F)
+    where F: FnOnce() + Send + 'static {
+    log::info!("starting server with configuration {:#?}", cfg);
 
     rt::run(rt::lazy(move || {
         let (server, stopper) = make_server(cfg);
@@ -46,10 +41,18 @@ pub fn run(cfg: Config) {
         rt::spawn(signal_handler);
         rt::spawn(server);
 
+        log::info!("ready to serve");
+        notify();
+
         Ok(())
     }));
 
     log::info!("done");
+
+}
+
+pub fn run(cfg: Config) {
+    run_notify(cfg, || {});
 }
 
 fn make_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<()>) {

@@ -21,7 +21,7 @@ impl Handler {
         log::info!("new handler for root at {:?}", root);
 
         Ok(Handler{
-            root: root,
+            root,
         })
     }
 
@@ -33,9 +33,9 @@ impl Handler {
         );
         log::debug!("{:#?}", request);
 
-        match request.method() {
-            &Method::GET => {},
-            &Method::HEAD => {},
+        match *request.method() {
+            Method::GET => {},
+            Method::HEAD => {},
             _ => {
                 log::debug!("unsuppored method");
                 return direct_response(StatusCode::METHOD_NOT_ALLOWED);
@@ -43,7 +43,7 @@ impl Handler {
         }
 
         let path = String::from(request.uri().path());
-        let path = path.trim_start_matches("/");
+        let path = path.trim_start_matches('/');
         let path = match self.root.join(path).absolute() {
             Ok(p) => p,
             Err(e) => {
@@ -73,7 +73,7 @@ fn should_compress(m: &Mime, headers: &HeaderMap<HeaderValue>) -> bool {
     if is_compressable(m) {
         log::debug!("{} is eligable for compression", m);
 
-        return match headers.get(header::ACCEPT_ENCODING) {
+        match headers.get(header::ACCEPT_ENCODING) {
             Some(ae) => {
                 match ae.to_str() {
                     Ok(aes) => {
@@ -84,10 +84,10 @@ fn should_compress(m: &Mime, headers: &HeaderMap<HeaderValue>) -> bool {
                 }
             },
             None => false,
-        };
+        }
     } else {
         log::debug!("{} is not eligable for compression", m);
-        return false;
+        false
     }
 }
 
@@ -109,9 +109,9 @@ fn serve_file(path: PathFile, request: Request<Body>) -> ResponseFuture {
 
     let fut = tokio::fs::file::File::open(path)
         .and_then(move |file| {
-            let body = match request.method() {
-                &Method::HEAD => Body::empty(),
-                &Method::GET => {
+            let body = match *request.method() {
+                Method::HEAD => Body::empty(),
+                Method::GET => {
                     if use_gzip {
                         let file = CompressedRead::new(file);
                         let stream = AsyncStream::new(file);
