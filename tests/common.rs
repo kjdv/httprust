@@ -16,16 +16,20 @@ pub fn server() {
             .join("tests")
             .join("sample_root");
 
+        let (tx, rx) = std::sync::mpsc::channel();
+
         std::thread::spawn(move || {
             let cfg = httprust::Config{
                 port: PORT,
                 local_only: true,
                 root: String::from(root.to_str().unwrap()),
             };
-            httprust::run(cfg);
+            httprust::run_notify(cfg, move || {
+                tx.send(()).expect("no notify readyness");
+            });
         });
 
-        busy_wait(|| try_connect(ADDRESS, PORT), 1).expect("connect");
+        rx.recv().expect("to be ready");
     });
 }
 

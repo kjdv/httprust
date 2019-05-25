@@ -16,14 +16,16 @@ mod async_stream;
 mod compressed_read;
 mod handler;
 
+#[derive(Debug)]
 pub struct Config {
     pub port: u16,
     pub local_only: bool,
     pub root: String,
 }
 
-pub fn run(cfg: Config) {
-    log::debug!("starting server");
+pub fn run_notify<F>(cfg: Config, notify: F)
+    where F: FnOnce() + Send + 'static {
+    log::info!("starting server with configuration {:#?}", cfg);
 
     rt::run(rt::lazy(move || {
         let (server, stopper) = make_server(cfg);
@@ -32,10 +34,18 @@ pub fn run(cfg: Config) {
         rt::spawn(signal_handler);
         rt::spawn(server);
 
+        log::info!("ready to serve");
+        notify();
+
         Ok(())
     }));
 
     log::info!("done");
+
+}
+
+pub fn run(cfg: Config) {
+    run_notify(cfg, || {});
 }
 
 fn make_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<()>) {
