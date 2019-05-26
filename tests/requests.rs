@@ -107,3 +107,31 @@ fn content_is_intact_when_compressed() {
         sha256(response.text().unwrap())
     );
 }
+
+#[test]
+fn tls_connect() {
+    tls_server();
+
+    let response = Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .expect("build client")
+        .get(make_tls_uri("index.html").as_str())
+        .send()
+        .expect("fail send");
+
+    assert_eq!(StatusCode::OK, response.status());
+}
+
+#[test]
+fn tls_connect_reject_unkown() {
+    tls_server();
+
+    Client::builder()
+        .danger_accept_invalid_certs(false)
+        .build()
+        .expect("build client")
+        .get(make_tls_uri("index.html").as_str())
+        .send()
+        .expect_err("this should fail");
+}
