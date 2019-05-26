@@ -23,6 +23,8 @@ pub fn configure_tls(cfg: TlsConfig) -> Result<Arc<rustls::ServerConfig>> {
     let key = load_private_key(cfg.private_key_file.as_str())?;
     // Do not use client certificate authentication.
     let mut server_cfg = rustls::ServerConfig::new(rustls::NoClientAuth::new());
+    server_cfg.alpn_protocols = vec![b"h2".to_vec(), b"http1.1".to_vec()];
+
     // Select a certificate to use.
     server_cfg.set_single_cert(certs, key)
         .map_err(|e| error(format!("{}", e)))?;
