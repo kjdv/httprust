@@ -15,6 +15,7 @@ mod meta_info;
 mod async_stream;
 mod compressed_read;
 mod handler;
+mod tls;
 
 #[derive(Debug)]
 pub struct TlsConfig {
@@ -35,12 +36,20 @@ pub fn run_notify<F>(cfg: Config, notify: F)
     log::info!("starting server with configuration {:#?}", cfg);
 
     rt::run(rt::lazy(move || {
-        let (server, stopper) = make_server(cfg);
-        let signal_handler = make_signal_handler(stopper);
+        if cfg.tls.is_some() {
+            let (server, stopper) = make_tls_server(cfg);
+            let signal_handler = make_signal_handler(stopper);
+            
+            rt::spawn(signal_handler);
+            rt::spawn(server);
+        } else {
+            let (server, stopper) = make_plain_server(cfg);
+            let signal_handler = make_signal_handler(stopper);
 
-        rt::spawn(signal_handler);
-        rt::spawn(server);
-
+            rt::spawn(signal_handler);
+            rt::spawn(server);
+        }
+        
         log::info!("ready to serve");
         notify();
 
@@ -55,7 +64,9 @@ pub fn run(cfg: Config) {
     run_notify(cfg, || {});
 }
 
-fn make_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<()>) {
+fn make_plain_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<()>) {
+    log::warn!("running insecure http (not s) server");
+
     let address = {
         if cfg.local_only {
             [127, 0, 0, 1]
@@ -65,9 +76,47 @@ fn make_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<()>) 
     };
     let address = (address, cfg.port).into();
 
-    let server_builder = hyper::Server::bind(&address);
+    let handle = handler::Handler::new(cfg.root.as_str())
+        .map_err(|e| {
+            log::error!("error creating handler {}", e);
+            panic!("create handler");
+        }).unwrap();
+
+    let handle = Arc::new(handle);
+
+    let handle = move || {
+        let this_handler = handle.clone();
+        hyper::service::service_fn(move |req| {
+            this_handler.handle(req)
+        })
+    };
+
+    let server = hyper::Server::bind(&address)
+        .serve(handle);
+     
+    log::info!("listening on {:?}", address);
 
     let (tx, rx) = channel::<()>();
+    let server = server
+        .with_graceful_shutdown(rx)
+        .map_err(|e| { log::error!("server error {}", e)});
+
+    (server, tx)
+}
+
+// todo: plenty of duplicated code with make_plain_server, but heavy use of generics make it very hard to 
+//       create meaningful return types
+fn make_tls_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<()>) {
+    log::info!("running https server");
+
+    let address = {
+        if cfg.local_only {
+            [127, 0, 0, 1]
+        } else {
+            [0, 0, 0, 0]
+        }
+    };
+    let address = (address, cfg.port).into();
 
     let handle = handler::Handler::new(cfg.root.as_str())
         .map_err(|e| {
@@ -77,22 +126,28 @@ fn make_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<()>) 
 
     let handle = Arc::new(handle);
 
-    let server = server_builder
-        .serve(move || {
-            let this_handler = handle.clone();
-            hyper::service::service_fn(move |req| {
-                this_handler.handle(req)
-            })
-    });
+    let handle = move || {
+        let this_handler = handle.clone();
+        hyper::service::service_fn(move |req| {
+            this_handler.handle(req)
+        })
+    };
 
+    let cfg = tls::configure_tls(cfg.tls.unwrap()).unwrap();
+
+    let server = tls::make_server(address, cfg).unwrap()
+        .serve(handle);
+     
     log::info!("listening on {:?}", address);
 
+    let (tx, rx) = channel::<()>();
     let server = server
         .with_graceful_shutdown(rx)
         .map_err(|e| { log::error!("server error {}", e)});
 
     (server, tx)
 }
+
 
 fn make_signal_handler(stopper: Sender<()>) -> impl Future<Item = (), Error = ()> {
     use tokio_signal::unix::{Signal, SIGINT, SIGTERM};
