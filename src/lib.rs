@@ -3,8 +3,6 @@ extern crate log;
 extern crate futures;
 extern crate tokio;
 extern crate tokio_signal;
-#[macro_use]
-extern crate lazy_static;
 
 
 use std::sync::Arc;
@@ -27,7 +25,7 @@ pub struct TlsConfig {
 pub struct Config {
     pub port: u16,
     pub local_only: bool,
-    pub root: String, 
+    pub root: String,
     pub tls: Option<TlsConfig>,
 }
 
@@ -39,7 +37,7 @@ pub fn run_notify<F>(cfg: Config, notify: F)
         if cfg.tls.is_some() {
             let (server, stopper) = make_tls_server(cfg);
             let signal_handler = make_signal_handler(stopper);
-            
+
             rt::spawn(signal_handler);
             rt::spawn(server);
         } else {
@@ -49,7 +47,7 @@ pub fn run_notify<F>(cfg: Config, notify: F)
             rt::spawn(signal_handler);
             rt::spawn(server);
         }
-        
+
         log::info!("ready to serve");
         notify();
 
@@ -93,7 +91,7 @@ fn make_plain_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender
 
     let server = hyper::Server::bind(&address)
         .serve(handle);
-     
+
     log::info!("listening on {:?}", address);
 
     let (tx, rx) = channel::<()>();
@@ -104,7 +102,7 @@ fn make_plain_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender
     (server, tx)
 }
 
-// todo: plenty of duplicated code with make_plain_server, but heavy use of generics make it very hard to 
+// todo: plenty of duplicated code with make_plain_server, but heavy use of generics make it very hard to
 //       create meaningful return types
 fn make_tls_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<()>) {
     log::info!("running https server");
@@ -137,7 +135,7 @@ fn make_tls_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<(
 
     let server = tls::make_server(address, cfg).unwrap()
         .serve(handle);
-     
+
     log::info!("listening on {:?}", address);
 
     let (tx, rx) = channel::<()>();

@@ -99,7 +99,7 @@ fn serve_file(path: PathFile, request: Request<Body>) -> ResponseFuture {
     if let Some(mime) = sniff_mime(path.as_os_str()) {
         builder.header(header::CONTENT_TYPE, mime.to_string());
 
-        if should_compress(mime, request.headers()) {
+        if should_compress(&mime, request.headers()) {
             log::debug!("compressing {:?}", path);
             builder.header(header::CONTENT_ENCODING, "gzip");
             use_gzip = true;
