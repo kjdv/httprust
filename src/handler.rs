@@ -1,15 +1,15 @@
 extern crate path_abs;
 
-use path_abs::{PathDir, PathFile};
 use super::log;
-use futures::{future, Future};
-use hyper::{Body, Request, Response, StatusCode, Method, HeaderMap, header};
-use hyper::header::HeaderValue;
 use crate::async_stream::AsyncStream;
-use crate::meta_info::*;
 use crate::compressed_read::*;
+use crate::meta_info::*;
+use futures::{future, Future};
+use hyper::header::HeaderValue;
+use hyper::{header, Body, HeaderMap, Method, Request, Response, StatusCode};
+use path_abs::{PathDir, PathFile};
 
-type ResponseFuture = Box<Future<Item=Response<Body>, Error=hyper::Error> + Send>;
+type ResponseFuture = Box<Future<Item = Response<Body>, Error = hyper::Error> + Send>;
 
 pub struct Handler {
     root: PathDir,
@@ -20,9 +20,7 @@ impl Handler {
         let root = PathDir::new(root)?.canonicalize()?;
         log::info!("new handler for root at {:?}", root);
 
-        Ok(Handler{
-            root,
-        })
+        Ok(Handler { root })
     }
 
     pub fn handle(&self, request: Request<Body>) -> ResponseFuture {
@@ -34,8 +32,8 @@ impl Handler {
         log::debug!("{:#?}", request);
 
         match *request.method() {
-            Method::GET => {},
-            Method::HEAD => {},
+            Method::GET => {}
+            Method::HEAD => {}
             _ => {
                 log::debug!("unsuppored method");
                 return direct_response(StatusCode::METHOD_NOT_ALLOWED);
@@ -74,14 +72,12 @@ fn should_compress(m: &Mime, headers: &HeaderMap<HeaderValue>) -> bool {
         log::debug!("{} is eligable for compression", m);
 
         match headers.get(header::ACCEPT_ENCODING) {
-            Some(ae) => {
-                match ae.to_str() {
-                    Ok(aes) => {
-                        let s = String::from(aes);
-                        s.split(',').any(|v| v == "gzip")
-                    },
-                    Err(_) => false,
+            Some(ae) => match ae.to_str() {
+                Ok(aes) => {
+                    let s = String::from(aes);
+                    s.split(',').any(|v| v == "gzip")
                 }
+                Err(_) => false,
             },
             None => false,
         }
@@ -106,7 +102,6 @@ fn serve_file(path: PathFile, request: Request<Body>) -> ResponseFuture {
         }
     }
 
-
     let fut = tokio::fs::file::File::open(path)
         .and_then(move |file| {
             let body = match *request.method() {
@@ -120,14 +115,11 @@ fn serve_file(path: PathFile, request: Request<Body>) -> ResponseFuture {
                         let stream = AsyncStream::new(file);
                         Body::wrap_stream(stream)
                     }
-                },
+                }
                 _ => panic!("unreachable!"),
             };
 
-            Ok(builder
-                .status(StatusCode::OK)
-                .body(body)
-                .unwrap())
+            Ok(builder.status(StatusCode::OK).body(body).unwrap())
         })
         .or_else(|e| {
             log::warn!("error serving file: {}", e);
@@ -156,8 +148,7 @@ mod tests {
     use super::*;
 
     fn make_handler() -> Handler {
-        let cargo_dir = std::env::var("CARGO_MANIFEST_DIR")
-            .expect("CARGO_MANIFEST_DIR to be set");
+        let cargo_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR to be set");
         let root = std::path::PathBuf::from(cargo_dir)
             .join("tests")
             .join("sample_root");
@@ -166,14 +157,14 @@ mod tests {
     }
 
     fn handle<F>(request: Request<Body>, check: F)
-        where F: FnOnce(Response<Body>) + Send + 'static {
+    where
+        F: FnOnce(Response<Body>) + Send + 'static,
+    {
         let handler = make_handler();
 
-        let response_future = handler.handle(request)
-            .map(check)
-            .map_err(|e| {
-                panic!("error checking: {}", e);
-            });
+        let response_future = handler.handle(request).map(check).map_err(|e| {
+            panic!("error checking: {}", e);
+        });
 
         current_thread::Runtime::new()
             .expect("new runtime")
@@ -184,13 +175,10 @@ mod tests {
 
     fn check_code_for_resource(resource: &str, expect: StatusCode) {
         let uri = format!("http://something/{}", resource);
-        let request = Request::builder()
-            .uri(uri)
-            .body(Body::from(""))
-            .unwrap();
-            handle(request, move |res| {
-                assert_eq!(expect, res.status());
-            });
+        let request = Request::builder().uri(uri).body(Body::from("")).unwrap();
+        handle(request, move |res| {
+            assert_eq!(expect, res.status());
+        });
     }
 
     #[test]

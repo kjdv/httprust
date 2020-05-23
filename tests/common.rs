@@ -1,18 +1,16 @@
-use std::sync::{Once, ONCE_INIT};
 use reqwest;
+use std::sync::{Once, ONCE_INIT};
 
-pub use reqwest::{Client, Response, Error, StatusCode};
+pub use reqwest::{Client, Error, Response, StatusCode};
 
 pub const PORT: u16 = 2950;
 pub const TLS_PORT: u16 = PORT + 1;
 pub const ADDRESS: &str = "localhost";
 
-
 pub fn server() {
     static SERVER: Once = ONCE_INIT;
     SERVER.call_once(|| {
-        let cargo_dir = std::env::var("CARGO_MANIFEST_DIR")
-            .expect("CARGO_MANIFEST_DIR to be set");
+        let cargo_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR to be set");
         let root = std::path::PathBuf::from(cargo_dir)
             .join("tests")
             .join("sample_root");
@@ -20,7 +18,7 @@ pub fn server() {
         let (tx, rx) = std::sync::mpsc::channel();
 
         std::thread::spawn(move || {
-            let cfg = httprust::Config{
+            let cfg = httprust::Config {
                 port: PORT,
                 local_only: true,
                 root: String::from(root.to_str().unwrap()),
@@ -38,8 +36,7 @@ pub fn server() {
 pub fn tls_server() {
     static SERVER: Once = ONCE_INIT;
     SERVER.call_once(|| {
-        let cargo_dir = std::env::var("CARGO_MANIFEST_DIR")
-            .expect("CARGO_MANIFEST_DIR to be set");
+        let cargo_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR to be set");
         let root = std::path::PathBuf::from(cargo_dir.clone())
             .join("tests")
             .join("sample_root");
@@ -52,7 +49,7 @@ pub fn tls_server() {
         let (tx, rx) = std::sync::mpsc::channel();
 
         std::thread::spawn(move || {
-            let cfg = httprust::Config{
+            let cfg = httprust::Config {
                 port: TLS_PORT,
                 local_only: true,
                 root: String::from(root.to_str().unwrap()),
@@ -81,7 +78,5 @@ pub fn make_tls_uri(resource: &str) -> String {
 pub fn get(resource: &str) -> Result<Response, Error> {
     let uri = make_uri(resource);
 
-    Client::new()
-        .get(uri.as_str())
-        .send()
+    Client::new().get(uri.as_str()).send()
 }

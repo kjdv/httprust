@@ -1,19 +1,21 @@
-use futures::{Stream, Poll};
-use futures::prelude::*;
-use tokio::io::{AsyncRead};
 use super::log;
-
+use futures::prelude::*;
+use futures::{Poll, Stream};
+use tokio::io::AsyncRead;
 
 pub struct AsyncStream<A>
-    where A: AsyncRead {
+where
+    A: AsyncRead,
+{
     io: A,
     buffer: Vec<u8>,
     pos: usize,
 }
 
 impl<A> AsyncStream<A>
-    where A: AsyncRead {
-
+where
+    A: AsyncRead,
+{
     pub fn new(reader: A) -> AsyncStream<A> {
         const DEFAULT_SIZE: usize = 0xffff;
         AsyncStream::with_size(reader, DEFAULT_SIZE)
@@ -21,7 +23,7 @@ impl<A> AsyncStream<A>
 
     pub fn with_size(reader: A, max_size: usize) -> AsyncStream<A> {
         log::debug!("creating stream reader with chunk size {}", max_size);
-        AsyncStream{
+        AsyncStream {
             io: reader,
             buffer: Self::make_buf(max_size),
             pos: 0,
@@ -53,20 +55,26 @@ impl<A> AsyncStream<A>
         let request = end - start;
 
         log::debug!("attempting to read {} bytes", request);
-        match self.io.poll_read(&mut self.buffer.as_mut_slice()[start..end]) {
-            Ok(Async::Ready(n)) if n == request => { // all available
+        match self
+            .io
+            .poll_read(&mut self.buffer.as_mut_slice()[start..end])
+        {
+            Ok(Async::Ready(n)) if n == request => {
+                // all available
                 log::debug!("read {} bytes, chunk ready", n);
                 self.pos += n;
                 let result = self.reset_buffer();
                 Ok(Async::Ready(Some(result)))
-            },
-            Ok(Async::Ready(n)) if n > 0 => { // part available
+            }
+            Ok(Async::Ready(n)) if n > 0 => {
+                // part available
                 log::debug!("read {} bytes, chunk not ready", n);
                 assert!(n < request);
                 self.pos += n;
                 Ok(Async::NotReady)
-            },
-            Ok(Async::Ready(0)) => { // eof
+            }
+            Ok(Async::Ready(0)) => {
+                // eof
                 // if there is something in the buffer, return it
                 if self.pos > 0 {
                     log::debug!("read 0 bytes, serving last chunk");
@@ -76,7 +84,7 @@ impl<A> AsyncStream<A>
                     log::debug!("read 0 bytes, singalling eof");
                     Ok(Async::Ready(None))
                 }
-            },
+            }
             Ok(Async::NotReady) => {
                 log::debug!("no data ready yet");
                 Ok(Async::NotReady)
@@ -88,7 +96,9 @@ impl<A> AsyncStream<A>
 }
 
 impl<A> Stream for AsyncStream<A>
-    where A: AsyncRead {
+where
+    A: AsyncRead,
+{
     type Item = Vec<u8>;
     type Error = std::io::Error;
 
@@ -129,14 +139,12 @@ mod tests {
     }
 
     struct FakeRead {
-        input: Vec<Part>
+        input: Vec<Part>,
     }
 
     impl FakeRead {
         fn new(input: Vec<Part>) -> FakeRead {
-            FakeRead {
-                input
-            }
+            FakeRead { input }
         }
     }
 
@@ -153,7 +161,7 @@ mod tests {
                     buf[..len].clone_from_slice(&data[..len]);
 
                     Ok(len)
-                },
+                }
                 Part::Block => Err(wouldblock()),
                 Part::Eof => Ok(0),
                 Part::Err(e) => Err(e),
@@ -173,11 +181,7 @@ mod tests {
 
     #[test]
     fn exact_single() {
-        let mut stream = AsyncStream::with_size(
-            FakeRead::new(vec![
-                Part::data(b"abcd")
-            ]
-        ), 4);
+        let mut stream = AsyncStream::with_size(FakeRead::new(vec![Part::data(b"abcd")]), 4);
 
         let result = stream.do_poll().unwrap();
         assert_eq!(make_ready("abcd"), result);
@@ -185,12 +189,8 @@ mod tests {
 
     #[test]
     fn underflow() {
-        let mut stream = AsyncStream::with_size(
-            FakeRead::new(vec![
-                Part::data(b"abc"),
-                Part::data(b"d"),
-            ]
-        ), 4);
+        let mut stream =
+            AsyncStream::with_size(FakeRead::new(vec![Part::data(b"abc"), Part::data(b"d")]), 4);
 
         let result = stream.do_poll().unwrap();
         assert!(!result.is_ready());
@@ -201,11 +201,7 @@ mod tests {
 
     #[test]
     fn overflow() {
-        let mut stream = AsyncStream::with_size(
-            FakeRead::new(vec![
-                Part::data(b"abcdef"),
-            ]
-        ), 4);
+        let mut stream = AsyncStream::with_size(FakeRead::new(vec![Part::data(b"abcdef")]), 4);
 
         let result = stream.do_poll().unwrap();
         assert_eq!(make_ready("abcd"), result);
@@ -213,11 +209,7 @@ mod tests {
 
     #[test]
     fn wouldblock_is_noop() {
-        let mut stream = AsyncStream::with_size(
-            FakeRead::new(vec![
-                Part::Block,
-            ]
-        ), 4);
+        let mut stream = AsyncStream::with_size(FakeRead::new(vec![Part::Block]), 4);
 
         let result = stream.do_poll().unwrap();
         assert!(!result.is_ready());
@@ -225,22 +217,14 @@ mod tests {
 
     #[test]
     fn error_is_propagated() {
-        let mut stream = AsyncStream::with_size(
-            FakeRead::new(vec![
-                Part::err("blah"),
-            ]
-        ), 4);
+        let mut stream = AsyncStream::with_size(FakeRead::new(vec![Part::err("blah")]), 4);
 
         stream.do_poll().unwrap_err();
     }
 
     #[test]
     fn eof_gives_none() {
-        let mut stream = AsyncStream::with_size(
-            FakeRead::new(vec![
-                Part::Eof,
-            ]
-        ), 4);
+        let mut stream = AsyncStream::with_size(FakeRead::new(vec![Part::Eof]), 4);
 
         let result = stream.do_poll().unwrap();
         assert_eq!(Async::Ready(None), result);
@@ -248,12 +232,8 @@ mod tests {
 
     #[test]
     fn early_eof_gives_part_chunk() {
-        let mut stream = AsyncStream::with_size(
-            FakeRead::new(vec![
-                Part::data(b"ab"),
-                Part::Eof,
-            ]
-        ), 4);
+        let mut stream =
+            AsyncStream::with_size(FakeRead::new(vec![Part::data(b"ab"), Part::Eof]), 4);
 
         let result = stream.do_poll().unwrap();
         assert!(!result.is_ready());
@@ -273,8 +253,9 @@ mod tests {
                 Part::data(b"ef"),
                 Part::data(b"gh"),
                 Part::Eof,
-            ]
-        ), 4);
+            ]),
+            4,
+        );
 
         let result = stream.do_poll().unwrap();
         assert_eq!(make_ready("abcd"), result);

@@ -1,18 +1,17 @@
+extern crate futures;
 extern crate hyper;
 extern crate log;
-extern crate futures;
 extern crate tokio;
 extern crate tokio_signal;
 
-
-use std::sync::Arc;
+use futures::sync::oneshot::{channel, Sender};
 use hyper::rt::{self, Future, Stream};
-use futures::sync::oneshot::{Sender, channel};
+use std::sync::Arc;
 
-mod meta_info;
 mod async_stream;
 mod compressed_read;
 mod handler;
+mod meta_info;
 mod tls;
 
 #[derive(Debug)]
@@ -30,7 +29,9 @@ pub struct Config {
 }
 
 pub fn run_notify<F>(cfg: Config, notify: F)
-    where F: FnOnce() + Send + 'static {
+where
+    F: FnOnce() + Send + 'static,
+{
     log::info!("starting server with configuration {:#?}", cfg);
 
     rt::run(rt::lazy(move || {
@@ -55,7 +56,6 @@ pub fn run_notify<F>(cfg: Config, notify: F)
     }));
 
     log::info!("done");
-
 }
 
 pub fn run(cfg: Config) {
@@ -78,26 +78,24 @@ fn make_plain_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender
         .map_err(|e| {
             log::error!("error creating handler {}", e);
             panic!("create handler");
-        }).unwrap();
+        })
+        .unwrap();
 
     let handle = Arc::new(handle);
 
     let handle = move || {
         let this_handler = handle.clone();
-        hyper::service::service_fn(move |req| {
-            this_handler.handle(req)
-        })
+        hyper::service::service_fn(move |req| this_handler.handle(req))
     };
 
-    let server = hyper::Server::bind(&address)
-        .serve(handle);
+    let server = hyper::Server::bind(&address).serve(handle);
 
     log::info!("listening on {:?}", address);
 
     let (tx, rx) = channel::<()>();
     let server = server
         .with_graceful_shutdown(rx)
-        .map_err(|e| { log::error!("server error {}", e)});
+        .map_err(|e| log::error!("server error {}", e));
 
     (server, tx)
 }
@@ -120,32 +118,29 @@ fn make_tls_server(cfg: Config) -> (impl Future<Item = (), Error = ()>, Sender<(
         .map_err(|e| {
             log::error!("error creating handler {}", e);
             panic!("create handler");
-        }).unwrap();
+        })
+        .unwrap();
 
     let handle = Arc::new(handle);
 
     let handle = move || {
         let this_handler = handle.clone();
-        hyper::service::service_fn(move |req| {
-            this_handler.handle(req)
-        })
+        hyper::service::service_fn(move |req| this_handler.handle(req))
     };
 
     let cfg = tls::configure_tls(cfg.tls.unwrap()).unwrap();
 
-    let server = tls::make_server(address, cfg).unwrap()
-        .serve(handle);
+    let server = tls::make_server(address, cfg).unwrap().serve(handle);
 
     log::info!("listening on {:?}", address);
 
     let (tx, rx) = channel::<()>();
     let server = server
         .with_graceful_shutdown(rx)
-        .map_err(|e| { log::error!("server error {}", e)});
+        .map_err(|e| log::error!("server error {}", e));
 
     (server, tx)
 }
-
 
 fn make_signal_handler(stopper: Sender<()>) -> impl Future<Item = (), Error = ()> {
     use tokio_signal::unix::{Signal, SIGINT, SIGTERM};
@@ -154,7 +149,8 @@ fn make_signal_handler(stopper: Sender<()>) -> impl Future<Item = (), Error = ()
     let sigterm = Signal::new(SIGTERM).flatten_stream();
     let stream = sigint.select(sigterm);
 
-    stream.into_future()
+    stream
+        .into_future()
         .and_then(|sig| {
             let (sig, _) = sig;
             log::info!("got signal {:?}, stopping", sig);

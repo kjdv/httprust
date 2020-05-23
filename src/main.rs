@@ -1,6 +1,6 @@
 extern crate clap;
-extern crate pretty_env_logger;
 extern crate path_abs;
+extern crate pretty_env_logger;
 
 use httprust;
 
@@ -57,7 +57,7 @@ fn main() {
         )
         .get_matches();
 
-    let cfg = httprust::Config{
+    let cfg = httprust::Config {
         port: args
             .value_of("port")
             .unwrap()
@@ -65,13 +65,12 @@ fn main() {
             .expect("invalid port number"),
         local_only: args.is_present("local_only"),
         root: args.value_of("root_directory").unwrap().to_string(),
-        tls: args.value_of("certificate_file")
-                .map(|cf| {
-                    httprust::TlsConfig{
-                        certificate_file: cf.to_string(),
-                        private_key_file: args.value_of("private_key_file").unwrap().to_string()
-                    }
-                }),
+        tls: args
+            .value_of("certificate_file")
+            .map(|cf| httprust::TlsConfig {
+                certificate_file: cf.to_string(),
+                private_key_file: args.value_of("private_key_file").unwrap().to_string(),
+            }),
     };
     httprust::run(cfg);
 }
@@ -79,13 +78,13 @@ fn main() {
 fn validate_directory(d: String) -> Result<(), String> {
     match path_abs::PathDir::new(d) {
         Ok(_) => Ok(()),
-        Err(e) => Err(format!("{}", e))
+        Err(e) => Err(format!("{}", e)),
     }
 }
 
 fn validate_file(f: String) -> Result<(), String> {
     match path_abs::PathFile::new(f) {
         Ok(_) => Ok(()),
-        Err(e) => Err(format!("{}", e))
+        Err(e) => Err(format!("{}", e)),
     }
 }

@@ -30,7 +30,9 @@ fn large_files_are_chunked() {
     server();
 
     let response = get("large.txt").expect("request failed");
-    let transer_encoding = response.headers().get(reqwest::header::TRANSFER_ENCODING)
+    let transer_encoding = response
+        .headers()
+        .get(reqwest::header::TRANSFER_ENCODING)
         .expect("expected transfer-encoding");
 
     assert_eq!("chunked", transer_encoding);
@@ -63,7 +65,7 @@ fn head_returns_no_data() {
 }
 
 fn sha256(s: String) -> String {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
 
     let mut hasher = Sha256::new();
     hasher.input(s.as_bytes());

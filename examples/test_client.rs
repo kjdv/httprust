@@ -9,7 +9,6 @@ fn main() {
         .author("Klaas de Vries")
         .about("Simple http test client")
         .about("perform a head request")
-
         .arg(
             clap::Arg::with_name("URL")
                 .required(true)
@@ -27,13 +26,15 @@ fn main() {
         )
         .get_matches();
 
-
     let url = args.value_of("URL").unwrap();
 
     let mut response = reqwest::Client::new()
         .get(url)
-        .send().expect("request failure");
+        .send()
+        .expect("request failure");
 
     log::info!("{:#?}", response);
-    response.copy_to(&mut std::io::stdout()).expect("failed write");
+    response
+        .copy_to(&mut std::io::stdout())
+        .expect("failed write");
 }

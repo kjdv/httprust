@@ -4,7 +4,6 @@ extern crate mime_guess;
 pub use mime_guess::Mime;
 use std::ffi::OsStr;
 
-
 pub fn sniff_mime(path: &OsStr) -> Option<Mime> {
     mime_guess::guess_mime_type_opt(path)
 }
@@ -19,10 +18,9 @@ pub fn is_compressable(m: &Mime) -> bool {
         mime::JSON => true,
         mime::TEXT => true,
         mime::XML => true,
-        _ => false
+        _ => false,
     }
 }
-
 
 #[cfg(test)]
 mod tests {
