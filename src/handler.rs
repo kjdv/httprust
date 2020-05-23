@@ -9,7 +9,7 @@ use hyper::header::HeaderValue;
 use hyper::{header, Body, HeaderMap, Method, Request, Response, StatusCode};
 use path_abs::{PathDir, PathFile};
 
-type ResponseFuture = Box<Future<Item = Response<Body>, Error = hyper::Error> + Send>;
+type ResponseFuture = Box<dyn Future<Item = Response<Body>, Error = hyper::Error> + Send>;
 
 pub struct Handler {
     root: PathDir,

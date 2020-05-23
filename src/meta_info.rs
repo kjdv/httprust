@@ -5,7 +5,7 @@ pub use mime_guess::Mime;
 use std::ffi::OsStr;
 
 pub fn sniff_mime(path: &OsStr) -> Option<Mime> {
-    mime_guess::guess_mime_type_opt(path)
+    mime_guess::from_path(path).first()
 }
 
 pub fn is_compressable(m: &Mime) -> bool {

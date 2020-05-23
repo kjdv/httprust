@@ -1,5 +1,5 @@
 use reqwest;
-use std::sync::{Once, ONCE_INIT};
+use std::sync::Once;
 
 pub use reqwest::{Client, Error, Response, StatusCode};
 
@@ -8,7 +8,7 @@ pub const TLS_PORT: u16 = PORT + 1;
 pub const ADDRESS: &str = "localhost";
 
 pub fn server() {
-    static SERVER: Once = ONCE_INIT;
+    static SERVER: Once = Once::new();
     SERVER.call_once(|| {
         let cargo_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR to be set");
         let root = std::path::PathBuf::from(cargo_dir)
@@ -34,7 +34,7 @@ pub fn server() {
 }
 
 pub fn tls_server() {
-    static SERVER: Once = ONCE_INIT;
+    static SERVER: Once = Once::new();
     SERVER.call_once(|| {
         let cargo_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR to be set");
         let root = std::path::PathBuf::from(cargo_dir.clone())
